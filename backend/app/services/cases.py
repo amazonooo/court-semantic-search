@@ -10,6 +10,37 @@ from ..models import (
 from ..providers.base import CourtProvider
 
 
+_SUBSTANTIVE_DOCUMENT_TYPES = (
+    "решение",
+    "постановление",
+    "судебный приказ",
+)
+_SUBSTANTIVE_CONTENT_MARKERS = (
+    "удовлетворить",
+    "отказать",
+    "взыскать",
+    "признать",
+    "отменить",
+    "изменить",
+    "оставить без изменения",
+    "жалобу без удовлетворения",
+    "утвердить мировое соглашение",
+)
+_PROCEDURAL_CONTENT_MARKERS = (
+    "принять к производству",
+    "назначить дело",
+    "назначить судебное разбирательство",
+    "отложить судебное разбирательство",
+    "отложение судебного разбирательства",
+    "объявить перерыв",
+    "оставить без движения",
+    "возвратить апелляционную жалобу",
+    "возвращение апелляционной жалобы",
+    "выдать исполнительный лист",
+    "исправить опечатку",
+)
+
+
 class CaseAggregationService:
     def __init__(self, provider: CourtProvider) -> None:
         self._provider = provider
@@ -101,6 +132,10 @@ class CaseAggregationService:
             for document in sorted_documents
             if document.instance_level is not None
         ]
+        preferred_document = max(
+            sorted_documents,
+            key=self._preferred_document_sort_key,
+        )
 
         return CourtCase(
             case_id=first.case_id,
@@ -116,6 +151,8 @@ class CaseAggregationService:
             document_count=len(sorted_documents),
             latest_document_date=max(dated_documents) if dated_documents else None,
             highest_instance_level=max(instance_levels) if instance_levels else None,
+            preferred_document_id=preferred_document.document_id,
+            preferred_document=preferred_document,
             documents=sorted_documents,
         )
 
@@ -127,4 +164,35 @@ class CaseAggregationService:
             document.registration_date is not None,
             document.registration_date or date.min,
             document.document_type or "",
+        )
+
+    @classmethod
+    def _preferred_document_sort_key(
+        cls,
+        document: CourtDocument,
+    ) -> tuple[int, int, bool, date, str]:
+        document_type = (document.document_type or "").casefold()
+        content = " ".join(document.content_types).casefold()
+
+        type_score = 0
+        for marker in _SUBSTANTIVE_DOCUMENT_TYPES:
+            if marker in document_type:
+                type_score = 40
+                break
+        if "определение" in document_type:
+            type_score = max(type_score, 10)
+
+        content_score = sum(
+            25 for marker in _SUBSTANTIVE_CONTENT_MARKERS if marker in content
+        )
+        content_score -= sum(
+            35 for marker in _PROCEDURAL_CONTENT_MARKERS if marker in content
+        )
+
+        return (
+            type_score + content_score,
+            document.instance_level if document.instance_level is not None else -1,
+            document.registration_date is not None,
+            document.registration_date or date.min,
+            document.document_id,
         )

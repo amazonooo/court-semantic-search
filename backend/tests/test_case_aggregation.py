@@ -34,6 +34,8 @@ def make_document(
     case_number: str,
     instance_level: int,
     registration_date: date,
+    document_type: str = "Test document",
+    content_types: list[str] | None = None,
 ) -> CourtDocument:
     return CourtDocument(
         document_id=document_id,
@@ -44,7 +46,8 @@ def make_document(
         instance_number=f"instance-{document_id}",
         instance_level=instance_level,
         court="Test court",
-        document_type="Test document",
+        document_type=document_type,
+        content_types=content_types or [],
         file_name=f"{document_id}.pdf",
         file_url=f"https://kad.arbitr.ru/Document/Pdf/{document_id}.pdf",
     )
@@ -110,6 +113,52 @@ async def test_search_cases_paginates_deduplicates_and_groups_documents() -> Non
         "doc-3",
         "doc-1",
     ]
+    assert case_one.preferred_document_id == "doc-3"
+    assert case_one.preferred_document.document_id == "doc-3"
+
+
+@pytest.mark.asyncio
+async def test_search_cases_prefers_substantive_act_over_procedural_definition() -> None:
+    procedural_definition = make_document(
+        "procedural-definition",
+        case_id="case-1",
+        case_number="А40-1/2023",
+        instance_level=2,
+        registration_date=date(2023, 8, 1),
+        document_type="Определение",
+        content_types=[
+            "Принять к производству апелляционную жалобу",
+            "Назначить дело к судебному разбирательству",
+        ],
+    )
+    substantive_resolution = make_document(
+        "substantive-resolution",
+        case_id="case-1",
+        case_number="А40-1/2023",
+        instance_level=2,
+        registration_date=date(2023, 7, 26),
+        document_type="Постановление апелляционной инстанции",
+        content_types=["Оставить определение без изменения, жалобу без удовлетворения"],
+    )
+
+    provider = FakeCourtProvider(
+        {
+            1: DocumentSearchResult(
+                count=2,
+                pages=1,
+                page=1,
+                items=[procedural_definition, substantive_resolution],
+            )
+        }
+    )
+
+    result = await CaseAggregationService(provider).search_cases(
+        DocumentSearchParams(text="налоговый спор")
+    )
+
+    case = result.items[0]
+    assert case.preferred_document_id == "substantive-resolution"
+    assert case.preferred_document.document_type == "Постановление апелляционной инстанции"
 
 
 @pytest.mark.asyncio
