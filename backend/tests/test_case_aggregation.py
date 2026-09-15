@@ -1,13 +1,16 @@
 from datetime import date
 
 import pytest
+from fastapi.testclient import TestClient
 
+from backend.app.main import app
 from backend.app.models import (
     CourtDocument,
     DocumentSearchParams,
     DocumentSearchResult,
 )
 from backend.app.providers.base import CourtProvider
+from backend.app.providers.factory import get_court_provider
 from backend.app.services.cases import CaseAggregationService
 
 
@@ -140,3 +143,34 @@ async def test_search_cases_respects_max_pages_limit() -> None:
     assert result.source_pages == 5
     assert result.unique_document_count == 1
     assert result.case_count == 1
+
+
+def test_cases_search_endpoint_accepts_flat_query_parameters() -> None:
+    provider = FakeCourtProvider(
+        {
+            1: DocumentSearchResult(
+                count=0,
+                pages=0,
+                page=1,
+                items=[],
+            )
+        }
+    )
+    app.dependency_overrides[get_court_provider] = lambda: provider
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/api/cases/search",
+                params={
+                    "caseNumber": "15АП-20855/2018",
+                    "page": 1,
+                    "maxPages": 3,
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert provider.requested_pages == [1]
+    assert response.json()["case_count"] == 0

@@ -34,6 +34,15 @@ class DocumentSearchParams(BaseModel):
         return self
 
 
+class CaseSearchParams(DocumentSearchParams):
+    max_pages: int = Field(default=3, alias="maxPages", ge=1, le=20)
+
+    def to_document_search_params(self) -> DocumentSearchParams:
+        return DocumentSearchParams.model_validate(
+            self.model_dump(exclude={"max_pages"}, by_alias=True)
+        )
+
+
 class CourtDocument(BaseModel):
     document_id: str
     case_id: str
