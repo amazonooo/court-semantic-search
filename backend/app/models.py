@@ -61,6 +61,25 @@ class DocumentSearchResult(BaseModel):
     items: list[CourtDocument]
 
 
+class CourtCase(BaseModel):
+    case_id: str
+    case_number: str
+    case_url: str | None = None
+    document_count: int
+    latest_document_date: date | None = None
+    highest_instance_level: int | None = None
+    documents: list[CourtDocument]
+
+
+class CaseSearchResult(BaseModel):
+    source_document_count: int
+    source_pages: int
+    pages_fetched: int
+    unique_document_count: int
+    case_count: int
+    items: list[CourtCase]
+
+
 class PdfTextRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

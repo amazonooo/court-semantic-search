@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
+from .api.routes.cases import router as cases_router
 from .api.routes.documents import router as documents_router
 from .providers.base import (
     CourtProviderAccessError,
@@ -10,8 +11,9 @@ from .providers.base import (
     CourtProviderValidationError,
 )
 
-app = FastAPI(title="Court Semantic Search API", version="0.2.0")
+app = FastAPI(title="Court Semantic Search API", version="0.3.0")
 app.include_router(documents_router)
+app.include_router(cases_router)
 
 
 @app.get("/health")
