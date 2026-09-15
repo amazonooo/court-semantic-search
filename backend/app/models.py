@@ -101,3 +101,12 @@ class PdfTextResponse(BaseModel):
     file_url: str
     text: str
     char_count: int
+
+
+class PreferredDocumentTextResponse(BaseModel):
+    case_id: str
+    case_number: str
+    document_id: str
+    document: CourtDocument
+    text: str
+    char_count: int

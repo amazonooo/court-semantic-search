@@ -11,7 +11,7 @@ from .providers.base import (
     CourtProviderValidationError,
 )
 
-app = FastAPI(title="Court Semantic Search API", version="0.3.0")
+app = FastAPI(title="Court Semantic Search API", version="0.4.0")
 app.include_router(documents_router)
 app.include_router(cases_router)
 
