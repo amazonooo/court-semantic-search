@@ -77,6 +77,8 @@ class CourtCase(BaseModel):
     document_count: int
     latest_document_date: date | None = None
     highest_instance_level: int | None = None
+    preferred_document_id: str
+    preferred_document: CourtDocument
     documents: list[CourtDocument]
 
 
