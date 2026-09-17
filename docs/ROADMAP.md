@@ -93,9 +93,9 @@ Current RAS provider does not expose a dedicated OGRN parameter, so OGRN must no
 
 1. Date hard-filter re-check after RAS response. [in progress]
 2. High-level collection search endpoint for participant/court/period/category combinations. [in progress]
-3. Replace `preferred_document` with explicit document roles.
+3. Replace `preferred_document` with explicit document roles. [done]
 4. Multi-query retrieval: accept several search formulations, union, deduplicate and group by `CaseId`.
-5. First-instance-first factual retrieval while still allowing higher-instance matches.
+5. First-instance-first factual retrieval while still allowing higher-instance matches. [done]
 6. KAD provider for case status, participants and full procedural history.
 7. Region -> courts resolver and region collections.
 8. OGRN support only if confirmed by provider/KAD.

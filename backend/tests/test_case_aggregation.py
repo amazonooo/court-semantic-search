@@ -128,6 +128,17 @@ async def test_search_cases_paginates_deduplicates_and_groups_documents() -> Non
     ]
     assert case_one.preferred_document_id == "doc-3"
     assert case_one.preferred_document.document_id == "doc-3"
+    assert [document.document_id for document in case_one.first_instance_documents] == [
+        "doc-1"
+    ]
+    assert case_one.factual_base_document.document_id == "doc-1"
+    assert case_one.first_instance_document.document_id == "doc-1"
+    assert case_one.appellate_documents == []
+    assert [document.document_id for document in case_one.cassation_documents] == [
+        "doc-3"
+    ]
+    assert case_one.procedural_documents == []
+    assert case_one.latest_substantive_document is None
 
 
 @pytest.mark.asyncio
@@ -206,6 +217,18 @@ async def test_search_cases_expands_candidate_case_and_filters_by_case_id() -> N
         "procedural",
     }
     assert "stray" not in {document.document_id for document in case.documents}
+    assert [document.document_id for document in case.first_instance_documents] == [
+        "first-instance"
+    ]
+    assert case.factual_base_document.document_id == "first-instance"
+    assert case.first_instance_document.document_id == "first-instance"
+    assert [document.document_id for document in case.appellate_documents] == [
+        "appeal",
+        "procedural",
+    ]
+    assert [document.document_id for document in case.procedural_documents] == [
+        "procedural"
+    ]
 
     assert provider.requests[0].text == "обстоятельства сделки"
     assert provider.requests[1].case_number == "А40-1/2023"
@@ -253,6 +276,57 @@ async def test_search_cases_prefers_substantive_act_over_procedural_definition()
     case = result.items[0]
     assert case.preferred_document_id == "substantive-resolution"
     assert case.preferred_document.document_type == "Постановление апелляционной инстанции"
+    assert case.latest_substantive_document.document_id == "substantive-resolution"
+    assert case.procedural_documents == [procedural_definition]
+
+
+@pytest.mark.asyncio
+async def test_first_instance_is_factual_base_even_when_higher_instance_is_newer() -> None:
+    first_instance = make_document(
+        "first-instance",
+        case_id="case-1",
+        case_number="А40-1/2023",
+        instance_level=1,
+        registration_date=date(2023, 1, 10),
+        document_type="Решение",
+        content_types=["Взыскать задолженность"],
+    )
+    appellate = make_document(
+        "appeal",
+        case_id="case-1",
+        case_number="А40-1/2023",
+        instance_level=2,
+        registration_date=date(2023, 7, 26),
+        document_type="Постановление апелляционной инстанции",
+        content_types=["Оставить решение без изменения"],
+    )
+
+    provider = FakeCourtProvider(
+        {
+            1: DocumentSearchResult(
+                count=2,
+                pages=1,
+                page=1,
+                items=[first_instance, appellate],
+            )
+        }
+    )
+
+    result = await CaseAggregationService(provider).search_cases(
+        DocumentSearchParams(text="задолженность")
+    )
+
+    case = result.items[0]
+    assert case.factual_base_document.document_id == "first-instance"
+    assert case.first_instance_document.document_id == "first-instance"
+    assert case.latest_substantive_document.document_id == "appeal"
+    assert [document.document_id for document in case.appellate_documents] == [
+        "appeal"
+    ]
+    assert [document.document_id for document in case.documents] == [
+        "appeal",
+        "first-instance",
+    ]
 
 
 @pytest.mark.asyncio

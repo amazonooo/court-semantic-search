@@ -39,6 +39,16 @@ _PROCEDURAL_CONTENT_MARKERS = (
     "выдать исполнительный лист",
     "исправить опечатку",
 )
+_PROCEDURAL_TYPE_MARKERS = (
+    "определени",
+    "приняти",
+    "назначени",
+    "отложени",
+    "возвращени",
+    "оставлени без движени",
+    "выдач исполнительного листа",
+    "исправлени опечат",
+)
 
 
 class CaseAggregationService:
@@ -237,6 +247,36 @@ class CaseAggregationService:
             for document in sorted_documents
             if document.instance_level is not None
         ]
+
+        first_instance_documents = [
+            document for document in sorted_documents if document.instance_level == 1
+        ]
+        appellate_documents = [
+            document for document in sorted_documents if document.instance_level == 2
+        ]
+        cassation_documents = [
+            document
+            for document in sorted_documents
+            if document.instance_level is not None and document.instance_level >= 3
+        ]
+        procedural_documents = [
+            document
+            for document in sorted_documents
+            if self._is_procedural(document)
+        ]
+        substantive_documents = [
+            document
+            for document in sorted_documents
+            if self._is_substantive(document)
+        ]
+        factual_base_document = self._select_factual_base_document(
+            first_instance_documents
+        )
+        latest_substantive_document = (
+            max(substantive_documents, key=self._latest_substantive_sort_key)
+            if substantive_documents
+            else None
+        )
         preferred_document = max(
             sorted_documents,
             key=self._preferred_document_sort_key,
@@ -256,9 +296,75 @@ class CaseAggregationService:
             document_count=len(sorted_documents),
             latest_document_date=max(dated_documents) if dated_documents else None,
             highest_instance_level=max(instance_levels) if instance_levels else None,
+            first_instance_documents=first_instance_documents,
+            first_instance_document=factual_base_document,
+            factual_base_document=factual_base_document,
+            appellate_documents=appellate_documents,
+            cassation_documents=cassation_documents,
+            procedural_documents=procedural_documents,
+            latest_substantive_document=latest_substantive_document,
             preferred_document_id=preferred_document.document_id,
             preferred_document=preferred_document,
             documents=sorted_documents,
+        )
+
+    @classmethod
+    def _select_factual_base_document(
+        cls,
+        first_instance_documents: list[CourtDocument],
+    ) -> CourtDocument | None:
+        if not first_instance_documents:
+            return None
+
+        non_procedural_documents = [
+            document
+            for document in first_instance_documents
+            if not cls._is_procedural(document)
+        ]
+        candidates = non_procedural_documents or first_instance_documents
+        return max(candidates, key=cls._factual_base_sort_key)
+
+    @classmethod
+    def _factual_base_sort_key(
+        cls,
+        document: CourtDocument,
+    ) -> tuple[bool, bool, date, str]:
+        return (
+            cls._is_substantive(document),
+            document.registration_date is not None,
+            document.registration_date or date.min,
+            document.document_id,
+        )
+
+    @staticmethod
+    def _latest_substantive_sort_key(
+        document: CourtDocument,
+    ) -> tuple[bool, date, bool, int, str]:
+        return (
+            document.registration_date is not None,
+            document.registration_date or date.min,
+            document.instance_level is not None,
+            document.instance_level if document.instance_level is not None else -1,
+            document.document_id,
+        )
+
+    @staticmethod
+    def _is_procedural(document: CourtDocument) -> bool:
+        document_type = (document.document_type or "").casefold()
+        content = " ".join(document.content_types).casefold()
+        return any(marker in content for marker in _PROCEDURAL_CONTENT_MARKERS) or any(
+            marker in document_type for marker in _PROCEDURAL_TYPE_MARKERS
+        )
+
+    @classmethod
+    def _is_substantive(cls, document: CourtDocument) -> bool:
+        if cls._is_procedural(document):
+            return False
+
+        document_type = (document.document_type or "").casefold()
+        content = " ".join(document.content_types).casefold()
+        return any(marker in document_type for marker in _SUBSTANTIVE_DOCUMENT_TYPES) or any(
+            marker in content for marker in _SUBSTANTIVE_CONTENT_MARKERS
         )
 
     @staticmethod

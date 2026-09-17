@@ -145,9 +145,25 @@ class CourtCase(BaseModel):
     document_count: int
     latest_document_date: date | None = None
     highest_instance_level: int | None = None
-    preferred_document_id: str
-    preferred_document: CourtDocument
     documents: list[CourtDocument]
+    first_instance_documents: list[CourtDocument] = Field(default_factory=list)
+    first_instance_document: CourtDocument | None = None
+    factual_base_document: CourtDocument | None = None
+    appellate_documents: list[CourtDocument] = Field(default_factory=list)
+    cassation_documents: list[CourtDocument] = Field(default_factory=list)
+    procedural_documents: list[CourtDocument] = Field(default_factory=list)
+    latest_substantive_document: CourtDocument | None = None
+
+    # Deprecated compatibility fields. New consumers should use the explicit
+    # document roles above; these remain so older clients can migrate gradually.
+    preferred_document_id: str | None = Field(
+        default=None,
+        json_schema_extra={"deprecated": True},
+    )
+    preferred_document: CourtDocument | None = Field(
+        default=None,
+        json_schema_extra={"deprecated": True},
+    )
 
 
 class CaseSearchResult(BaseModel):
@@ -178,6 +194,16 @@ class PdfTextResponse(BaseModel):
 class PreferredDocumentTextResponse(BaseModel):
     case_id: str
     case_number: str
+    document_id: str
+    document: CourtDocument
+    text: str
+    char_count: int
+
+
+class CaseDocumentTextResponse(BaseModel):
+    case_id: str
+    case_number: str
+    role: str
     document_id: str
     document: CourtDocument
     text: str

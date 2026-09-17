@@ -133,3 +133,65 @@ def test_extract_preferred_text_returns_502_for_invalid_pdf() -> None:
 
     assert response.status_code == 502
     assert response.json()["detail"] == "Could not open PDF document"
+
+
+def test_extract_factual_base_text_prefers_first_instance_document() -> None:
+    case = make_case()
+    first_instance = CourtDocument(
+        document_id="first-instance",
+        case_id="case-1",
+        case_number="А40-1/2023",
+        registration_date="2023-01-10",
+        document_type="Решение",
+        file_url="https://example.test/first-instance.pdf",
+    )
+    case = case.model_copy(
+        update={
+            "first_instance_documents": [first_instance],
+            "factual_base_document": first_instance,
+            "latest_substantive_document": case.preferred_document,
+        }
+    )
+    provider = FakeCourtProvider(
+        {first_instance.file_url: make_pdf("First instance facts")}
+    )
+    app.dependency_overrides[get_court_provider] = lambda: provider
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/cases/extract-factual-base-text",
+                json=case.model_dump(mode="json"),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["role"] == "factual_base"
+    assert payload["document_id"] == "first-instance"
+    assert provider.downloaded_urls == [first_instance.file_url]
+    assert "First instance facts" in payload["text"]
+
+
+def test_extract_latest_substantive_text_uses_explicit_role() -> None:
+    case = make_case()
+    provider = FakeCourtProvider(
+        {case.preferred_document.file_url: make_pdf("Latest substantive act")}
+    )
+    case = case.model_copy(update={"latest_substantive_document": case.preferred_document})
+    app.dependency_overrides[get_court_provider] = lambda: provider
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/cases/extract-latest-substantive-text",
+                json=case.model_dump(mode="json"),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["role"] == "latest_substantive"
+    assert payload["document_id"] == "substantive-resolution"

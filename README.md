@@ -20,14 +20,18 @@
 - `GET /api/documents/search` — сырой поиск судебных актов.
 - `POST /api/documents/extract-text` — PDF -> текст.
 - `GET /api/cases/search` — поиск с дедупликацией, группировкой и bounded case expansion.
-- `POST /api/cases/extract-preferred-text` — временный endpoint для извлечения текста текущего `preferred_document`; в roadmap он будет заменён явными ролями документов.
+- `POST /api/cases/extract-factual-base-text` — текст фактической базы дела: в первую очередь substantive-акт первой инстанции.
+- `POST /api/cases/extract-latest-substantive-text` — текст последнего substantive-акта.
+- `POST /api/cases/extract-preferred-text` — совместимый legacy endpoint; новые клиенты должны использовать явные role-поля и endpoints.
 - `POST /api/collections/search` — высокоуровневый поиск подборки по участнику, суду, периоду, типу/категории спора и тексту.
 
 ## Архитектурные правила
 
 - пользовательский период — hard filter для попадания дела в кандидаты;
 - после того как дело прошло фильтр, его полная история может включать акты вне периода как контекст;
-- первая инстанция должна стать основным источником фактических обстоятельств;
+- первая инстанция (`first_instance_document`/`factual_base_document` и `first_instance_documents`) должна стать основным источником фактических обстоятельств;
+- `appellate_documents`, `cassation_documents` и `procedural_documents` остаются отдельными ролями внутри дела;
+- `latest_substantive_document` используется для последнего содержательного судебного акта;
 - апелляция и кассация остаются частью дела и нужны для изменений, новых доказательств и итоговой судьбы спора;
 - исход дела не должен по умолчанию ограничивать retrieval;
 - RAS используется для судебных актов; KAD планируется для статуса дела, участников и полной процессуальной истории.

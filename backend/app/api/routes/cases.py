@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ...models import (
+    CaseDocumentTextResponse,
     CaseSearchParams,
     CaseSearchResult,
     CourtCase,
@@ -16,6 +17,7 @@ from ...providers.base import CourtProvider
 from ...providers.factory import get_court_provider
 from ...services.case_text import (
     PreferredDocumentNotFoundError,
+    extract_case_document_text,
     extract_preferred_document_text,
 )
 from ...services.cases import CaseAggregationService
@@ -50,6 +52,58 @@ async def search_cases(
         max_cases_to_expand=params.max_cases_to_expand,
         max_case_pages=params.max_case_pages,
     )
+
+
+@router.post(
+    "/extract-factual-base-text",
+    response_model=CaseDocumentTextResponse,
+)
+async def extract_factual_base_case_text(
+    case: CourtCase,
+    provider: Annotated[CourtProvider, Depends(get_court_provider)],
+) -> CaseDocumentTextResponse:
+    try:
+        return await extract_case_document_text(
+            case,
+            provider,
+            role="factual_base",
+        )
+    except PreferredDocumentNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except PdfExtractionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/extract-latest-substantive-text",
+    response_model=CaseDocumentTextResponse,
+)
+async def extract_latest_substantive_case_text(
+    case: CourtCase,
+    provider: Annotated[CourtProvider, Depends(get_court_provider)],
+) -> CaseDocumentTextResponse:
+    try:
+        return await extract_case_document_text(
+            case,
+            provider,
+            role="latest_substantive",
+        )
+    except PreferredDocumentNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except PdfExtractionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
 
 
 @router.post(
