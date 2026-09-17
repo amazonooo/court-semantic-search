@@ -31,6 +31,8 @@ class DocumentSearchParams(BaseModel):
             raise ValueError(
                 "At least one of caseNumber, inn, text, court, disputeType or disputeCategory is required"
             )
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("dateFrom must be earlier than or equal to dateTo")
         return self
 
 
@@ -51,6 +53,61 @@ class CaseSearchParams(DocumentSearchParams):
                 },
                 by_alias=True,
             )
+        )
+
+
+class CaseCollectionParams(BaseModel):
+    """High-level filters for reusable court-case collections.
+
+    `participant` is mapped to Parser API's `inn` field, which the provider
+    documentation also accepts for a participant name/FIO. Region resolution
+    and OGRN are intentionally not guessed here; they remain provider/KAD work.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    participant: str | None = None
+    text: str | None = None
+    court: str | None = None
+    date_from: date | None = Field(default=None, alias="dateFrom")
+    date_to: date | None = Field(default=None, alias="dateTo")
+    dispute_type: str | None = Field(default=None, alias="disputeType")
+    dispute_category: str | None = Field(default=None, alias="disputeCategory")
+    max_pages: int = Field(default=3, alias="maxPages", ge=1, le=20)
+    expand_cases: bool = Field(default=True, alias="expandCases")
+    max_cases_to_expand: int = Field(default=10, alias="maxCasesToExpand", ge=1, le=50)
+    max_case_pages: int = Field(default=3, alias="maxCasePages", ge=1, le=20)
+
+    @model_validator(mode="after")
+    def validate_collection(self) -> "CaseCollectionParams":
+        criteria = (
+            self.participant,
+            self.text,
+            self.court,
+            self.dispute_type,
+            self.dispute_category,
+        )
+        if not any(value and value.strip() for value in criteria):
+            raise ValueError(
+                "At least one of participant, text, court, disputeType or disputeCategory is required"
+            )
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("dateFrom must be earlier than or equal to dateTo")
+        return self
+
+    def to_case_search_params(self) -> CaseSearchParams:
+        return CaseSearchParams(
+            inn=self.participant,
+            text=self.text,
+            court=self.court,
+            dateFrom=self.date_from,
+            dateTo=self.date_to,
+            disputeType=self.dispute_type,
+            disputeCategory=self.dispute_category,
+            maxPages=self.max_pages,
+            expandCases=self.expand_cases,
+            maxCasesToExpand=self.max_cases_to_expand,
+            maxCasePages=self.max_case_pages,
         )
 
 
@@ -98,6 +155,7 @@ class CaseSearchResult(BaseModel):
     source_pages: int
     pages_fetched: int
     candidate_unique_document_count: int
+    filtered_out_by_date: int
     case_expansion_pages_fetched: int
     expanded_case_count: int
     unique_document_count: int
