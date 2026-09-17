@@ -124,3 +124,36 @@ class PreferredDocumentTextResponse(BaseModel):
     document: CourtDocument
     text: str
     char_count: int
+
+
+class SearchPlan(BaseModel):
+    queries: list[str] = Field(min_length=2, max_length=5)
+    must_have: list[str] = Field(default_factory=list, max_length=10)
+    exclude: list[str] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def clean_terms(self) -> "SearchPlan":
+        self.queries = list(dict.fromkeys(q.strip() for q in self.queries if q.strip()))
+        self.must_have = list(dict.fromkeys(q.strip() for q in self.must_have if q.strip()))
+        self.exclude = list(dict.fromkeys(q.strip() for q in self.exclude if q.strip()))
+        if len(self.queries) < 2:
+            raise ValueError("At least two distinct search queries are required")
+        return self
+
+
+class SemanticSearchRequest(BaseModel):
+    description: str = Field(min_length=20, max_length=5000)
+    max_pages_per_query: int = Field(default=1, ge=1, le=5)
+
+
+class RetrievedCase(BaseModel):
+    case: CourtCase
+    matched_queries: list[str]
+
+
+class SemanticSearchResponse(BaseModel):
+    plan: SearchPlan
+    query_count: int
+    document_count: int
+    case_count: int
+    items: list[RetrievedCase]
