@@ -61,7 +61,12 @@ class CaseAggregationService:
             pages_fetched,
         ) = await self._search_pages(params, max_pages=max_pages)
 
-        candidate_documents = self._deduplicate_documents(documents)
+        raw_candidate_documents = self._deduplicate_documents(documents)
+        candidate_documents = self._filter_candidate_documents_by_date(
+            raw_candidate_documents,
+            params,
+        )
+        filtered_out_by_date = len(raw_candidate_documents) - len(candidate_documents)
         candidate_cases = self._group_documents_by_case(candidate_documents)
 
         all_documents = list(candidate_documents)
@@ -104,6 +109,10 @@ class CaseAggregationService:
                         if document.case_number == case.case_number
                     ]
 
+                # Date limits are a hard filter for entering the candidate set, not
+                # for the procedural history of a case that already matched. Keeping
+                # the full history lets later stages inspect first instance, appeal
+                # and cassation even when those acts fall outside the user's period.
                 if matching_documents:
                     expanded_case_count += 1
                     all_documents.extend(matching_documents)
@@ -116,6 +125,7 @@ class CaseAggregationService:
             source_pages=source_pages,
             pages_fetched=pages_fetched,
             candidate_unique_document_count=len(candidate_documents),
+            filtered_out_by_date=filtered_out_by_date,
             case_expansion_pages_fetched=case_expansion_pages_fetched,
             expanded_case_count=expanded_case_count,
             unique_document_count=len(unique_documents),
@@ -152,6 +162,28 @@ class CaseAggregationService:
             source_pages,
             pages_fetched,
         )
+
+    @staticmethod
+    def _filter_candidate_documents_by_date(
+        documents: list[CourtDocument],
+        params: DocumentSearchParams,
+    ) -> list[CourtDocument]:
+        if params.date_from is None and params.date_to is None:
+            return documents
+
+        filtered: list[CourtDocument] = []
+        for document in documents:
+            document_date = document.registration_date
+            if document_date is None:
+                # With an explicit user period, an unknown date cannot be verified
+                # and therefore cannot safely enter the candidate set.
+                continue
+            if params.date_from is not None and document_date < params.date_from:
+                continue
+            if params.date_to is not None and document_date > params.date_to:
+                continue
+            filtered.append(document)
+        return filtered
 
     @staticmethod
     def _deduplicate_documents(
