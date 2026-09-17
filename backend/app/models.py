@@ -36,10 +36,21 @@ class DocumentSearchParams(BaseModel):
 
 class CaseSearchParams(DocumentSearchParams):
     max_pages: int = Field(default=3, alias="maxPages", ge=1, le=20)
+    expand_cases: bool = Field(default=True, alias="expandCases")
+    max_cases_to_expand: int = Field(default=10, alias="maxCasesToExpand", ge=1, le=50)
+    max_case_pages: int = Field(default=3, alias="maxCasePages", ge=1, le=20)
 
     def to_document_search_params(self) -> DocumentSearchParams:
         return DocumentSearchParams.model_validate(
-            self.model_dump(exclude={"max_pages"}, by_alias=True)
+            self.model_dump(
+                exclude={
+                    "max_pages",
+                    "expand_cases",
+                    "max_cases_to_expand",
+                    "max_case_pages",
+                },
+                by_alias=True,
+            )
         )
 
 
@@ -86,6 +97,9 @@ class CaseSearchResult(BaseModel):
     source_document_count: int
     source_pages: int
     pages_fetched: int
+    candidate_unique_document_count: int
+    case_expansion_pages_fetched: int
+    expanded_case_count: int
     unique_document_count: int
     case_count: int
     items: list[CourtCase]

@@ -50,7 +50,85 @@ class CaseAggregationService:
         params: DocumentSearchParams,
         *,
         max_pages: int = 3,
+        expand_cases: bool = False,
+        max_cases_to_expand: int = 10,
+        max_case_pages: int = 3,
     ) -> CaseSearchResult:
+        (
+            documents,
+            source_document_count,
+            source_pages,
+            pages_fetched,
+        ) = await self._search_pages(params, max_pages=max_pages)
+
+        candidate_documents = self._deduplicate_documents(documents)
+        candidate_cases = self._group_documents_by_case(candidate_documents)
+
+        all_documents = list(candidate_documents)
+        case_expansion_pages_fetched = 0
+        expanded_case_count = 0
+
+        if expand_cases:
+            for case in candidate_cases[:max_cases_to_expand]:
+                if not case.case_number:
+                    continue
+
+                case_params = DocumentSearchParams(
+                    caseNumber=case.case_number,
+                    page=1,
+                )
+                (
+                    expanded_documents,
+                    _expanded_source_count,
+                    _expanded_source_pages,
+                    expanded_pages_fetched,
+                ) = await self._search_pages(
+                    case_params,
+                    max_pages=max_case_pages,
+                )
+                case_expansion_pages_fetched += expanded_pages_fetched
+
+                # Parser API cannot search by CaseId directly. We therefore use the
+                # base case number only to retrieve candidates, then keep documents
+                # that belong to the exact canonical CaseId discovered initially.
+                if case.case_id:
+                    matching_documents = [
+                        document
+                        for document in expanded_documents
+                        if document.case_id == case.case_id
+                    ]
+                else:
+                    matching_documents = [
+                        document
+                        for document in expanded_documents
+                        if document.case_number == case.case_number
+                    ]
+
+                if matching_documents:
+                    expanded_case_count += 1
+                    all_documents.extend(matching_documents)
+
+        unique_documents = self._deduplicate_documents(all_documents)
+        cases = self._group_documents_by_case(unique_documents)
+
+        return CaseSearchResult(
+            source_document_count=source_document_count,
+            source_pages=source_pages,
+            pages_fetched=pages_fetched,
+            candidate_unique_document_count=len(candidate_documents),
+            case_expansion_pages_fetched=case_expansion_pages_fetched,
+            expanded_case_count=expanded_case_count,
+            unique_document_count=len(unique_documents),
+            case_count=len(cases),
+            items=cases,
+        )
+
+    async def _search_pages(
+        self,
+        params: DocumentSearchParams,
+        *,
+        max_pages: int,
+    ) -> tuple[list[CourtDocument], int, int, int]:
         first_result = await self._provider.search_documents(params)
 
         documents = list(first_result.items)
@@ -68,16 +146,11 @@ class CaseAggregationService:
                 source_pages = max(source_pages, page_result.pages)
                 source_document_count = max(source_document_count, page_result.count)
 
-        unique_documents = self._deduplicate_documents(documents)
-        cases = self._group_documents_by_case(unique_documents)
-
-        return CaseSearchResult(
-            source_document_count=source_document_count,
-            source_pages=source_pages,
-            pages_fetched=pages_fetched,
-            unique_document_count=len(unique_documents),
-            case_count=len(cases),
-            items=cases,
+        return (
+            documents,
+            source_document_count,
+            source_pages,
+            pages_fetched,
         )
 
     @staticmethod

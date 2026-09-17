@@ -15,12 +15,22 @@ from backend.app.services.cases import CaseAggregationService
 
 
 class FakeCourtProvider(CourtProvider):
-    def __init__(self, pages: dict[int, DocumentSearchResult]) -> None:
+    def __init__(
+        self,
+        pages: dict[int, DocumentSearchResult],
+        *,
+        case_pages: dict[str, dict[int, DocumentSearchResult]] | None = None,
+    ) -> None:
         self.pages = pages
+        self.case_pages = case_pages or {}
         self.requested_pages: list[int] = []
+        self.requests: list[DocumentSearchParams] = []
 
     async def search_documents(self, params: DocumentSearchParams) -> DocumentSearchResult:
         self.requested_pages.append(params.page)
+        self.requests.append(params)
+        if params.case_number and params.case_number in self.case_pages:
+            return self.case_pages[params.case_number][params.page]
         return self.pages[params.page]
 
     async def download_pdf(self, file_url: str) -> bytes | None:
@@ -102,6 +112,9 @@ async def test_search_cases_paginates_deduplicates_and_groups_documents() -> Non
     assert provider.requested_pages == [1, 2]
     assert result.source_document_count == 4
     assert result.pages_fetched == 2
+    assert result.candidate_unique_document_count == 3
+    assert result.case_expansion_pages_fetched == 0
+    assert result.expanded_case_count == 0
     assert result.unique_document_count == 3
     assert result.case_count == 2
 
@@ -115,6 +128,87 @@ async def test_search_cases_paginates_deduplicates_and_groups_documents() -> Non
     ]
     assert case_one.preferred_document_id == "doc-3"
     assert case_one.preferred_document.document_id == "doc-3"
+
+
+@pytest.mark.asyncio
+async def test_search_cases_expands_candidate_case_and_filters_by_case_id() -> None:
+    appellate = make_document(
+        "appeal",
+        case_id="case-1",
+        case_number="А40-1/2023",
+        instance_level=2,
+        registration_date=date(2023, 6, 1),
+        document_type="Постановление апелляционной инстанции",
+    )
+    first_instance = make_document(
+        "first-instance",
+        case_id="case-1",
+        case_number="А40-1/2023",
+        instance_level=1,
+        registration_date=date(2023, 1, 10),
+        document_type="Решение",
+    )
+    procedural = make_document(
+        "procedural",
+        case_id="case-1",
+        case_number="А40-1/2023",
+        instance_level=2,
+        registration_date=date(2023, 5, 20),
+        document_type="Определение",
+    )
+    stray_same_number = make_document(
+        "stray",
+        case_id="other-case-id",
+        case_number="А40-1/2023",
+        instance_level=1,
+        registration_date=date(2023, 2, 1),
+    )
+
+    provider = FakeCourtProvider(
+        {
+            1: DocumentSearchResult(
+                count=1,
+                pages=1,
+                page=1,
+                items=[appellate],
+            )
+        },
+        case_pages={
+            "А40-1/2023": {
+                1: DocumentSearchResult(
+                    count=4,
+                    pages=1,
+                    page=1,
+                    items=[appellate, first_instance, procedural, stray_same_number],
+                )
+            }
+        },
+    )
+
+    result = await CaseAggregationService(provider).search_cases(
+        DocumentSearchParams(text="обстоятельства сделки"),
+        expand_cases=True,
+        max_cases_to_expand=10,
+        max_case_pages=3,
+    )
+
+    assert result.candidate_unique_document_count == 1
+    assert result.case_expansion_pages_fetched == 1
+    assert result.expanded_case_count == 1
+    assert result.unique_document_count == 3
+    assert result.case_count == 1
+
+    case = result.items[0]
+    assert case.case_id == "case-1"
+    assert {document.document_id for document in case.documents} == {
+        "appeal",
+        "first-instance",
+        "procedural",
+    }
+    assert "stray" not in {document.document_id for document in case.documents}
+
+    assert provider.requests[0].text == "обстоятельства сделки"
+    assert provider.requests[1].case_number == "А40-1/2023"
 
 
 @pytest.mark.asyncio
@@ -215,6 +309,9 @@ def test_cases_search_endpoint_accepts_flat_query_parameters() -> None:
                     "caseNumber": "15АП-20855/2018",
                     "page": 1,
                     "maxPages": 3,
+                    "expandCases": True,
+                    "maxCasesToExpand": 10,
+                    "maxCasePages": 3,
                 },
             )
     finally:
@@ -223,3 +320,5 @@ def test_cases_search_endpoint_accepts_flat_query_parameters() -> None:
     assert response.status_code == 200
     assert provider.requested_pages == [1]
     assert response.json()["case_count"] == 0
+    assert response.json()["candidate_unique_document_count"] == 0
+    assert response.json()["case_expansion_pages_fetched"] == 0
