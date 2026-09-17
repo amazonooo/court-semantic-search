@@ -29,6 +29,9 @@ async def search_cases(
     return await service.search_cases(
         params.to_document_search_params(),
         max_pages=params.max_pages,
+        expand_cases=params.expand_cases,
+        max_cases_to_expand=params.max_cases_to_expand,
+        max_case_pages=params.max_case_pages,
     )
 
 
