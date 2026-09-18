@@ -45,7 +45,7 @@ class SemanticSearchService:
         self._planner = planner
 
     async def search(self, request: SemanticSearchRequest) -> SemanticSearchResponse:
-        plan = await self._planner.plan(request.description)
+        plan = request.plan or await self._planner.plan(request.description)
         unique: dict[str, CourtDocument] = {}
         matched: dict[str, set[str]] = defaultdict(set)
         for query in plan.queries:

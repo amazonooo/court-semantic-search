@@ -127,3 +127,23 @@ def test_semantic_search_endpoint() -> None:
         app.dependency_overrides.clear()
     assert response.status_code == 200
     assert response.json()["items"][0]["case"]["case_id"] == "case-1"
+
+
+def test_plan_endpoint_returns_llm_plan_before_provider_search() -> None:
+    from backend.app.main import app
+    from backend.app.providers.factory import get_court_provider
+    from backend.app.llm.factory import get_query_planner
+
+    app.dependency_overrides[get_court_provider] = FakeProvider
+    app.dependency_overrides[get_query_planner] = FakePlanner
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/cases/plan",
+                json={"description": "Компания присоединила заемщика и учла проценты по займу"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["queries"]

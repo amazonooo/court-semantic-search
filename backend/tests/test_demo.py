@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -54,4 +56,37 @@ def test_demo_page_is_served() -> None:
     with TestClient(app) as client:
         page = client.get("/demo")
     assert page.status_code == 200
-    assert "Учебные дела" in page.text
+    assert "Yandex LLM" in page.text
+    assert "/api/cases/semantic-search" in page.text
+
+
+def test_demo_status_reports_yandex_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    from backend.app.api.routes import demo as demo_routes
+
+    monkeypatch.setattr(
+        demo_routes,
+        "get_settings",
+        lambda: SimpleNamespace(
+            court_provider="parser_api",
+            parser_api_key="parser-key",
+            llm_provider="yandex",
+            yandex_api_key="yandex-key",
+            yandex_folder_id="folder-1",
+            yandex_model="yandexgpt-lite",
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/demo/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "court_provider": "parser_api",
+        "llm_provider": "yandex",
+        "model": "yandexgpt-lite",
+        "provider_ready": True,
+        "llm_ready": True,
+        "ready": True,
+        "ollama_ready": False,
+        "model_available": False,
+    }

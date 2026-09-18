@@ -51,10 +51,10 @@
 <main>
   <div class="eyebrow">Court Semantic Search · MVP</div>
   <h1>Поиск судебной практики по описанию ситуации</h1>
-  <p class="intro">Локальная модель составляет несколько запросов. Сервис находит дела, выбирает содержательный акт, извлекает текст PDF и показывает совпадения с ключевыми признаками.</p>
+  <p class="intro">Yandex LLM составляет поисковый план. Сервис отправляет запросы в источник судебных актов и показывает понятный результат: сформулированные запросы, найденные дела и документы.</p>
 
   <section class="panel">
-    <div class="status"><span id="status-dot" class="dot"></span><span id="status-text">Проверяем Ollama…</span><span class="badge warn">Учебные дела — не реальные судебные акты</span></div>
+    <div class="status"><span id="status-dot" class="dot"></span><span id="status-text">Проверяем подключение…</span><span id="status-badge" class="badge">Yandex LLM</span></div>
     <label for="description">Описание ситуации</label>
     <textarea id="description">После присоединения компании-заемщика правопреемник учел проценты по займу и убытки при расчете налога на прибыль. Налоговая оспаривает деловую цель реорганизации и налоговую выгоду.</textarea>
     <div class="row">
@@ -98,20 +98,27 @@
     try {
       const response = await fetch('/api/demo/status');
       const status = await response.json();
-      $('status-dot').classList.toggle('ok', status.ollama_ready && status.model_available);
-      $('status-text').textContent = status.ollama_ready && status.model_available
-        ? `Ollama готова · ${status.model} · источник: ${status.court_provider}`
-        : `Ollama или модель ${status.model} пока недоступна. Запустите Ollama и выполните: ollama pull ${status.model}`;
+      const provider = status.llm_provider === 'yandex' ? 'Yandex LLM' : 'Ollama';
+      const ready = Boolean(status.ready);
+      $('status-dot').classList.toggle('ok', ready);
+      $('status-badge').textContent = `${provider} · ${status.model || 'модель не указана'}`;
+      $('status-badge').className = `badge ${ready ? 'good' : 'warn'}`;
+      $('status-text').textContent = ready
+        ? `${provider} настроен · источник: ${status.court_provider}`
+        : `Проверьте настройки ${provider} и источника судебных актов`;
     } catch {
       $('status-text').textContent = 'Не удалось проверить состояние сервиса.';
     }
   }
-  function render(data) {
+  function renderPlan(plan, message) {
     $('results').hidden = false;
-    $('metrics').textContent = `Документов: ${data.document_count} · дел: ${data.case_count} · проверено PDF: ${data.cases_checked}`;
-    $('queries').replaceChildren(...data.plan.queries.map(query => el('div', query, 'query')));
-    chips($('must-have'), data.plan.must_have);
-    chips($('exclude'), data.plan.exclude);
+    $('metrics').textContent = message;
+    $('queries').replaceChildren(...plan.queries.map(query => el('div', query, 'query')));
+    chips($('must-have'), plan.must_have);
+    chips($('exclude'), plan.exclude);
+  }
+  function render(data) {
+    renderPlan(data.plan, `Документов: ${data.document_count} · дел: ${data.case_count}`);
     $('cases').replaceChildren();
     if (!data.items.length) {
       $('cases').append(el('p', 'По этим запросам дела не найдены. Попробуйте уточнить описание.'));
@@ -121,22 +128,29 @@
       const card = el('article', undefined, 'case');
       const head = el('div', undefined, 'case-head');
       const title = el('div');
-      title.append(el('h3', item.case.case_number), el('div', `${item.case.preferred_document.document_type || 'Акт'} · ${item.case.document_count} документ(ов)`, 'small'));
-      head.append(title, el('span', `${Math.round(item.coverage * 100)}% признаков`, 'badge ' + (item.coverage >= .8 ? 'good' : 'warn')));
+      const document = item.case.preferred_document || item.case.documents?.[0];
+      title.append(el('h3', item.case.case_number || item.case.case_id), el('div', `${document?.document_type || 'Акт'} · ${item.case.document_count} документ(ов)`, 'small'));
+      const hasCoverage = typeof item.coverage === 'number';
+      const badgeText = hasCoverage
+        ? `${Math.round(item.coverage * 100)}% признаков`
+        : `${item.matched_queries?.length || 0} совпавших запросов`;
+      head.append(title, el('span', badgeText, 'badge ' + (hasCoverage && item.coverage >= .8 ? 'good' : 'warn')));
       card.append(head);
+      if (item.matched_queries?.length) card.append(el('p', `Совпало поисковых формулировок: ${item.matched_queries.length}`, 'small'));
       if (item.excerpt) card.append(el('blockquote', item.excerpt));
       if (item.text_error) card.append(el('p', `Текст PDF недоступен: ${item.text_error}`, 'error'));
       const terms = el('div', undefined, 'chips');
-      item.matched_terms.forEach(term => terms.append(el('span', `✓ ${term}`, 'chip good')));
-      item.missing_terms.forEach(term => terms.append(el('span', `Нет: ${term}`, 'chip missing')));
+      (item.matched_terms || []).forEach(term => terms.append(el('span', `✓ ${term}`, 'chip good')));
+      (item.missing_terms || []).forEach(term => terms.append(el('span', `Нет: ${term}`, 'chip missing')));
       card.append(terms);
-      if (item.excluded_terms.length) card.append(el('p', `Нежелательные темы: ${item.excluded_terms.join(', ')}`, 'small'));
-      const doc = item.case.preferred_document;
-      const link = el('a', 'Открыть исходный PDF');
-      link.href = doc.file_url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      card.append(el('p', `ID дела: ${item.case.case_id} · ID документа: ${doc.document_id}`, 'small'), link);
+      if ((item.excluded_terms || []).length) card.append(el('p', `Нежелательные темы: ${item.excluded_terms.join(', ')}`, 'small'));
+      if (document) {
+        const link = el('a', 'Открыть исходный PDF');
+        link.href = document.file_url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        card.append(el('p', `ID дела: ${item.case.case_id} · ID документа: ${document.document_id}`, 'small'), link);
+      }
       $('cases').append(card);
     });
   }
@@ -144,19 +158,37 @@
   $('search').addEventListener('click', async () => {
     $('error').hidden = true;
     $('search').disabled = true;
-    $('search').textContent = 'Ищем…';
+    $('search').textContent = 'Формируем план…';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 180000);
     try {
-      const response = await fetch('/api/cases/search-with-evidence', {
+      const planResponse = await fetch('/api/cases/plan', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: $('description').value, max_pages_per_query: 1, max_cases: 6 })
+        body: JSON.stringify({ description: $('description').value, max_pages_per_query: 1 }),
+        signal: controller.signal,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${response.status}`);
+      const plan = await planResponse.json();
+      if (!planResponse.ok) throw new Error(typeof plan.detail === 'string' ? plan.detail : `HTTP ${planResponse.status}`);
+
+      renderPlan(plan, 'Yandex LLM сформировала план. Теперь ищем документы в Parser API…');
+      $('search').textContent = 'Ищем документы…';
+
+      const searchResponse = await fetch('/api/cases/semantic-search', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: $('description').value, max_pages_per_query: 1, plan }),
+        signal: controller.signal,
+      });
+      const data = await searchResponse.json();
+      if (!searchResponse.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${searchResponse.status}`);
       render(data);
     } catch (error) {
-      $('error').textContent = `Поиск не выполнен: ${error.message}`;
+      const message = error.name === 'AbortError'
+        ? 'Поиск занял больше трёх минут. Проверьте доступность Parser API и повторите запрос.'
+        : error.message;
+      $('error').textContent = `Поиск не выполнен: ${message}`;
       $('error').hidden = false;
     } finally {
+      clearTimeout(timeout);
       $('search').disabled = false;
       $('search').textContent = 'Найти похожие дела';
     }

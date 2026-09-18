@@ -10,12 +10,13 @@ from ...models import (
     EvidenceSearchRequest,
     EvidenceSearchResponse,
     PreferredDocumentTextResponse,
+    SearchPlan,
     SemanticSearchRequest,
     SemanticSearchResponse,
 )
 from ...llm.base import LlmError, QueryPlanner
 from ...llm.factory import get_query_planner
-from ...providers.base import CourtProvider
+from ...providers.base import CourtProvider, CourtProviderError
 from ...providers.factory import get_court_provider
 from ...services.case_text import (
     PreferredDocumentNotFoundError,
@@ -29,6 +30,17 @@ from ...services.semantic_search import SemanticSearchService
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 
 
+@router.post("/plan", response_model=SearchPlan)
+async def plan_case_search(
+    request: SemanticSearchRequest,
+    planner: Annotated[QueryPlanner, Depends(get_query_planner)],
+) -> SearchPlan:
+    try:
+        return request.plan or await planner.plan(request.description)
+    except LlmError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.post("/search-with-evidence", response_model=EvidenceSearchResponse)
 async def search_cases_with_evidence(
     request: EvidenceSearchRequest,
@@ -37,7 +49,7 @@ async def search_cases_with_evidence(
 ) -> EvidenceSearchResponse:
     try:
         return await SemanticSearchService(provider, planner).search_with_evidence(request)
-    except LlmError as exc:
+    except (LlmError, CourtProviderError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
@@ -49,7 +61,7 @@ async def semantic_search_cases(
 ) -> SemanticSearchResponse:
     try:
         return await SemanticSearchService(provider, planner).search(request)
-    except LlmError as exc:
+    except (LlmError, CourtProviderError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 

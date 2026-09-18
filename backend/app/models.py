@@ -228,6 +228,7 @@ class SearchPlan(BaseModel):
 class SemanticSearchRequest(BaseModel):
     description: str = Field(min_length=20, max_length=5000)
     max_pages_per_query: int = Field(default=1, ge=1, le=5)
+    plan: SearchPlan | None = None
 
 
 class RetrievedCase(BaseModel):
