@@ -1,6 +1,3 @@
-import fitz
-
-
 class PdfExtractionError(RuntimeError):
     pass
 
@@ -10,6 +7,8 @@ def extract_pdf_text(pdf_bytes: bytes) -> str:
         return ""
 
     try:
+        import fitz
+
         document = fitz.open(stream=pdf_bytes, filetype="pdf")
     except Exception as exc:
         raise PdfExtractionError("Could not open PDF document") from exc

@@ -7,6 +7,8 @@ from ...models import (
     CaseSearchParams,
     CaseSearchResult,
     CourtCase,
+    EvidenceSearchRequest,
+    EvidenceSearchResponse,
     PreferredDocumentTextResponse,
     SemanticSearchRequest,
     SemanticSearchResponse,
@@ -25,6 +27,18 @@ from ...services.pdf import PdfExtractionError
 from ...services.semantic_search import SemanticSearchService
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
+
+
+@router.post("/search-with-evidence", response_model=EvidenceSearchResponse)
+async def search_cases_with_evidence(
+    request: EvidenceSearchRequest,
+    provider: Annotated[CourtProvider, Depends(get_court_provider)],
+    planner: Annotated[QueryPlanner, Depends(get_query_planner)],
+) -> EvidenceSearchResponse:
+    try:
+        return await SemanticSearchService(provider, planner).search_with_evidence(request)
+    except LlmError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("/semantic-search", response_model=SemanticSearchResponse)

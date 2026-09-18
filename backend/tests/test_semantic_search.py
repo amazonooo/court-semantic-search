@@ -74,10 +74,16 @@ async def test_ollama_planner_uses_local_json_schema() -> None:
 async def test_yandex_planner_uses_api_key_header_and_folder_model() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "Api-Key test-key"
+        assert request.headers["Content-Type"] == "application/json"
         assert "test-key" not in str(request.url)
         body = json.loads(request.content)
         assert body["modelUri"] == "gpt://folder-1/yandexgpt-lite"
+        assert body["completionOptions"]["maxTokens"] == "1000"
+        assert body["completionOptions"]["reasoningOptions"] == {"mode": "DISABLED"}
         assert body["jsonSchema"]["schema"]["properties"]["queries"]
+        assert body["jsonSchema"]["schema"]["required"] == [
+            "queries", "must_have", "exclude"
+        ]
         return httpx.Response(200, json={"result": {"alternatives": [{"message": {"text": (
             '{"queries":["присоединение заем","убытки после присоединения"],'
             '"must_have":["заем"],"exclude":[]}'

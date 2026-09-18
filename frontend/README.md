@@ -1,5 +1,5 @@
 # Frontend
 
-Next.js frontend for the semantic court-case search MVP.
-
-The application shell and search interface will be added in the next implementation step.
+The MVP demo is a single page in `demo.html`, served by FastAPI at `/demo`.
+It calls `/api/cases/search-with-evidence` and displays the search plan,
+ranked demo cases, PDF excerpts, and source identifiers.
