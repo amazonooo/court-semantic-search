@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3:4b"
     yandex_api_key: str | None = None
     yandex_folder_id: str | None = None
-    yandex_model: str = "yandexgpt-lite"
+    yandex_model: str = "yandexgpt-5-lite"
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

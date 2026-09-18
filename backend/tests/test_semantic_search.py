@@ -77,7 +77,7 @@ async def test_yandex_planner_uses_api_key_header_and_folder_model() -> None:
         assert request.headers["Content-Type"] == "application/json"
         assert "test-key" not in str(request.url)
         body = json.loads(request.content)
-        assert body["modelUri"] == "gpt://folder-1/yandexgpt-lite"
+        assert body["modelUri"] == "gpt://folder-1/yandexgpt-5-lite"
         assert body["completionOptions"]["maxTokens"] == "1000"
         assert body["completionOptions"]["reasoningOptions"] == {"mode": "DISABLED"}
         assert body["jsonSchema"]["schema"]["properties"]["queries"]

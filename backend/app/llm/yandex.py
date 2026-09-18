@@ -37,7 +37,7 @@ class YandexQueryPlanner(QueryPlanner):
         api_key: str,
         folder_id: str,
         *,
-        model: str = "yandexgpt-lite",
+        model: str = "yandexgpt-5-lite",
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._api_key = api_key
