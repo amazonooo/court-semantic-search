@@ -157,3 +157,26 @@ class SemanticSearchResponse(BaseModel):
     document_count: int
     case_count: int
     items: list[RetrievedCase]
+
+
+class EvidenceSearchRequest(SemanticSearchRequest):
+    max_cases: int = Field(default=6, ge=1, le=20)
+
+
+class EvidenceCase(BaseModel):
+    case: CourtCase
+    matched_queries: list[str]
+    excerpt: str | None = None
+    matched_terms: list[str] = Field(default_factory=list)
+    missing_terms: list[str] = Field(default_factory=list)
+    excluded_terms: list[str] = Field(default_factory=list)
+    coverage: float = 0.0
+    text_error: str | None = None
+
+
+class EvidenceSearchResponse(BaseModel):
+    plan: SearchPlan
+    document_count: int
+    case_count: int
+    cases_checked: int
+    items: list[EvidenceCase]

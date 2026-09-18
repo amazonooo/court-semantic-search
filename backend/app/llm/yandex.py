@@ -22,7 +22,7 @@ class YandexQueryPlanner(QueryPlanner):
     async def plan(self, description: str) -> SearchPlan:
         payload = {
             "modelUri": f"gpt://{self._folder_id}/{self._model}",
-            "completionOptions": {"stream": False, "temperature": 0.2, "maxTokens": "1000"},
+            "completionOptions": {"stream": False, "temperature": 0.2, "maxTokens": 1000},
             "messages": [
                 {"role": "system", "text": SYSTEM_PROMPT},
                 {"role": "user", "text": description},

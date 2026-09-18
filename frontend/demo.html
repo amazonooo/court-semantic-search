@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Поиск судебной практики — демонстрация</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, Arial, sans-serif; background: #f4f6fa; color: #1a2738; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1080px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { margin: 4px 0 10px; font-size: clamp(28px, 4vw, 42px); line-height: 1.1; }
+    h2 { font-size: 21px; margin: 0 0 16px; }
+    h3 { margin: 0 0 8px; font-size: 18px; }
+    p { line-height: 1.55; }
+    .eyebrow { text-transform: uppercase; letter-spacing: .13em; color: #315e9a; font-size: 12px; font-weight: 700; }
+    .intro { max-width: 790px; color: #536174; margin-bottom: 24px; }
+    .panel, .case { background: #fff; border: 1px solid #dce3ed; border-radius: 14px; box-shadow: 0 5px 22px #213b5a0b; }
+    .panel { padding: 24px; margin-bottom: 20px; }
+    .status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 14px; color: #4c5b6d; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #e29b31; flex: none; }
+    .dot.ok { background: #218755; }
+    .badge { display: inline-flex; align-items: center; border-radius: 99px; padding: 5px 10px; font-size: 12px; font-weight: 700; background: #eaf0fa; color: #315e9a; }
+    .badge.good { background: #e6f5ed; color: #207a4e; }
+    .badge.warn { background: #fff1db; color: #996115; }
+    label { display: block; font-weight: 700; margin: 20px 0 8px; }
+    textarea { width: 100%; min-height: 126px; resize: vertical; border: 1px solid #bac7d9; border-radius: 9px; padding: 13px 15px; font: inherit; line-height: 1.5; color: inherit; }
+    textarea:focus { outline: 2px solid #83b3ff; border-color: #467dcc; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+    button { border: 0; background: #1e5dae; color: #fff; padding: 11px 20px; border-radius: 8px; font: inherit; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    button.secondary { background: #e8eef7; color: #26446b; }
+    .small { font-size: 13px; color: #617083; }
+    .error { color: #a22f2f; margin-top: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .mini { padding: 14px; border-radius: 9px; background: #f6f8fb; }
+    .mini strong { display: block; margin-bottom: 5px; }
+    .query { margin: 6px 0; padding: 10px 12px; border-left: 3px solid #5084c9; background: #f4f7fc; border-radius: 4px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { display: inline-block; border: 1px solid #d1dce9; border-radius: 99px; padding: 4px 9px; font-size: 13px; }
+    .chip.good { border-color: #9dd7b5; background: #eaf7ef; }
+    .chip.missing { border-color: #e4c89b; background: #fff6e7; }
+    .case { padding: 20px; margin: 12px 0; }
+    .case-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: start; }
+    blockquote { margin: 15px 0; border-left: 3px solid #b4c9e5; padding: 6px 0 6px 15px; color: #3d4e62; line-height: 1.6; white-space: pre-wrap; }
+    a { color: #1e5dae; font-weight: 650; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Court Semantic Search · MVP</div>
+  <h1>Поиск судебной практики по описанию ситуации</h1>
+  <p class="intro">Локальная модель составляет несколько запросов. Сервис находит дела, выбирает содержательный акт, извлекает текст PDF и показывает совпадения с ключевыми признаками.</p>
+
+  <section class="panel">
+    <div class="status"><span id="status-dot" class="dot"></span><span id="status-text">Проверяем Ollama…</span><span class="badge warn">Учебные дела — не реальные судебные акты</span></div>
+    <label for="description">Описание ситуации</label>
+    <textarea id="description">После присоединения компании-заемщика правопреемник учел проценты по займу и убытки при расчете налога на прибыль. Налоговая оспаривает деловую цель реорганизации и налоговую выгоду.</textarea>
+    <div class="row">
+      <button id="search">Найти похожие дела</button>
+      <button id="sample" class="secondary" type="button">Вернуть пример</button>
+      <span class="small">Данные для демонстрации находятся только в памяти; постоянная БД не используется.</span>
+    </div>
+    <div id="error" class="error" role="alert" hidden></div>
+  </section>
+
+  <section id="results" hidden>
+    <section class="panel">
+      <h2>Как модель поняла запрос</h2>
+      <div id="metrics" class="small"></div>
+      <div class="grid">
+        <div class="mini"><strong>Поисковые формулировки</strong><div id="queries"></div></div>
+        <div class="mini"><strong>Обязательные признаки</strong><div id="must-have" class="chips"></div><strong style="margin-top:14px">Исключить</strong><div id="exclude" class="chips"></div></div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Найденные дела и фрагменты</h2>
+      <p class="small">Порядок основан на совпадении признаков в тексте выбранного акта. Это подсказка для проверки, а не юридический вывод.</p>
+      <div id="cases"></div>
+    </section>
+  </section>
+</main>
+<script>
+  const sample = document.getElementById('description').value;
+  const $ = id => document.getElementById(id);
+  function el(tag, text, className) {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+  function chips(target, values, className='') {
+    target.replaceChildren(...values.map(value => el('span', value, 'chip ' + className)));
+    if (!values.length) target.append(el('span', 'Нет', 'small'));
+  }
+  async function checkStatus() {
+    try {
+      const response = await fetch('/api/demo/status');
+      const status = await response.json();
+      $('status-dot').classList.toggle('ok', status.ollama_ready && status.model_available);
+      $('status-text').textContent = status.ollama_ready && status.model_available
+        ? `Ollama готова · ${status.model} · источник: ${status.court_provider}`
+        : `Ollama или модель ${status.model} пока недоступна. Запустите Ollama и выполните: ollama pull ${status.model}`;
+    } catch {
+      $('status-text').textContent = 'Не удалось проверить состояние сервиса.';
+    }
+  }
+  function render(data) {
+    $('results').hidden = false;
+    $('metrics').textContent = `Документов: ${data.document_count} · дел: ${data.case_count} · проверено PDF: ${data.cases_checked}`;
+    $('queries').replaceChildren(...data.plan.queries.map(query => el('div', query, 'query')));
+    chips($('must-have'), data.plan.must_have);
+    chips($('exclude'), data.plan.exclude);
+    $('cases').replaceChildren();
+    if (!data.items.length) {
+      $('cases').append(el('p', 'По этим запросам дела не найдены. Попробуйте уточнить описание.'));
+      return;
+    }
+    data.items.forEach(item => {
+      const card = el('article', undefined, 'case');
+      const head = el('div', undefined, 'case-head');
+      const title = el('div');
+      title.append(el('h3', item.case.case_number), el('div', `${item.case.preferred_document.document_type || 'Акт'} · ${item.case.document_count} документ(ов)`, 'small'));
+      head.append(title, el('span', `${Math.round(item.coverage * 100)}% признаков`, 'badge ' + (item.coverage >= .8 ? 'good' : 'warn')));
+      card.append(head);
+      if (item.excerpt) card.append(el('blockquote', item.excerpt));
+      if (item.text_error) card.append(el('p', `Текст PDF недоступен: ${item.text_error}`, 'error'));
+      const terms = el('div', undefined, 'chips');
+      item.matched_terms.forEach(term => terms.append(el('span', `✓ ${term}`, 'chip good')));
+      item.missing_terms.forEach(term => terms.append(el('span', `Нет: ${term}`, 'chip missing')));
+      card.append(terms);
+      if (item.excluded_terms.length) card.append(el('p', `Нежелательные темы: ${item.excluded_terms.join(', ')}`, 'small'));
+      const doc = item.case.preferred_document;
+      const link = el('a', 'Открыть исходный PDF');
+      link.href = doc.file_url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      card.append(el('p', `ID дела: ${item.case.case_id} · ID документа: ${doc.document_id}`, 'small'), link);
+      $('cases').append(card);
+    });
+  }
+  $('sample').addEventListener('click', () => { $('description').value = sample; });
+  $('search').addEventListener('click', async () => {
+    $('error').hidden = true;
+    $('search').disabled = true;
+    $('search').textContent = 'Ищем…';
+    try {
+      const response = await fetch('/api/cases/search-with-evidence', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: $('description').value, max_pages_per_query: 1, max_cases: 6 })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${response.status}`);
+      render(data);
+    } catch (error) {
+      $('error').textContent = `Поиск не выполнен: ${error.message}`;
+      $('error').hidden = false;
+    } finally {
+      $('search').disabled = false;
+      $('search').textContent = 'Найти похожие дела';
+    }
+  });
+  checkStatus();
+</script>
+</body>
+</html>
