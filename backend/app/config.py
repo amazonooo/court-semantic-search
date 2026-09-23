@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     parser_api_base_url: str = "https://parser-api.com/parser/ras_arbitr_api"
     parser_api_timeout_seconds: float = 120.0
     parser_api_max_retries: int = 3
-    llm_provider: str = "ollama"
+    llm_provider: str = "yandex"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"
     yandex_api_key: str | None = None
