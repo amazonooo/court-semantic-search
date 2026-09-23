@@ -1,7 +1,7 @@
 # Court Semantic Search
 
-Локальный MVP поиска судебных актов по описанию ситуации. Ollama бесплатно
-генерирует несколько поисковых формулировок и ключевые признаки. CourtProvider
+MVP поиска судебных актов по описанию ситуации. Yandex LLM генерирует несколько
+поисковых формулировок и ключевые признаки. CourtProvider
 ищет документы; сервис группирует их по делу, выбирает содержательный акт,
 извлекает текст PDF и показывает фрагмент с совпавшими и отсутствующими
 признаками. Постоянная база данных не используется.
@@ -44,23 +44,21 @@
 
 Инструкция для подключения тестировщиков, проверки выдачи и сбора обратной
 связи по работе агента: [`docs/TESTING_GUIDE.md`](docs/TESTING_GUIDE.md).
-## Демо на Windows
+## Запуск на Windows
 
-1. Установите [Ollama](https://ollama.com/download).
-2. Из корня проекта выполните:
+1. Отключите VPN: с включённым VPN соединение с Yandex AI Studio или источником судебных актов может не работать.
+2. Создайте `.env` на основе `.env.example` и заполните ключи Yandex Cloud и Parser API.
+3. Из корня проекта выполните:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/start-demo.ps1
+   python -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+   .\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
    ```
 
-3. Откройте `http://127.0.0.1:8000/demo` и нажмите «Найти похожие дела».
+4. Откройте `http://127.0.0.1:8000/demo` и нажмите «Найти похожие дела».
 
-Скрипт создаёт `.venv`, устанавливает зависимости Python и при первом запуске
-скачивает `qwen3:4b` (около 2,5 ГБ). Дальше модель и API работают локально.
-Демо использует три **вымышленных учебных дела**: одно соответствует схеме
-присоединения заемщика, процентов и налоговой выгоды, два совпадают только по
-части признаков. Их PDF формируются в памяти. Это позволяет показать весь путь
-поиска без ключа Parser API и без внешней БД.
+Поисковый план формируется через Yandex AI Studio. Локальная LLM не требуется.
 
 ## Подключение реальных данных
 
@@ -69,13 +67,16 @@
 ```dotenv
 COURT_PROVIDER=parser_api
 PARSER_API_KEY=ваш_ключ
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=qwen3:4b
+LLM_PROVIDER=yandex
+YANDEX_API_KEY=ваш_API_ключ_Yandex_Cloud
+YANDEX_FOLDER_ID=идентификатор_каталога_Yandex_Cloud
+YANDEX_MODEL=yandexgpt-lite
+YANDEX_BASE_URL=https://ai.api.cloud.yandex.net
 ```
 
-Запустите `python -m uvicorn backend.app.main:app --reload`. Запросы к Ollama
-остаются локальными, а поиск и скачивание судебных PDF выполняет Parser API.
+Запустите `python -m uvicorn backend.app.main:app --reload`. Формирование
+поискового плана выполняет Yandex AI Studio, а поиск и скачивание судебных PDF — Parser API.
+Перед запуском отключите VPN: с включённым VPN сервис не работает.
 Ключи храните только в `.env` или переменных окружения; `.env` исключён из Git.
 
 ## API
