@@ -1,4 +1,7 @@
+import ssl
+
 import httpx
+import truststore
 
 from ..models import SearchPlan
 from .base import LlmError, QueryPlanner
@@ -70,7 +73,11 @@ class YandexQueryPlanner(QueryPlanner):
 
         try:
             if self._client is None:
-                async with httpx.AsyncClient(timeout=60) as client:
+                ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                async with httpx.AsyncClient(
+                    timeout=60,
+                    verify=ssl_context,
+                ) as client:
                     response = await client.post(
                         YANDEX_COMPLETION_URL,
                         headers=headers,
@@ -83,7 +90,9 @@ class YandexQueryPlanner(QueryPlanner):
                     json=payload,
                 )
         except httpx.RequestError as exc:
-            raise LlmError("Yandex AI Studio is unreachable") from exc
+            raise LlmError(
+                f"Yandex AI Studio is unreachable: {type(exc).__name__}: {exc}"
+            ) from exc
 
         if response.status_code != 200:
             detail = response.text.strip().replace("\n", " ")
