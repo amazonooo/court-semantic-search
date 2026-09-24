@@ -1,10 +1,12 @@
 import asyncio
 import base64
 import binascii
+import ssl
 from datetime import datetime
 from typing import Any
 
 import httpx
+import truststore
 
 from ..models import CourtDocument, DocumentSearchParams, DocumentSearchResult
 from .base import (
@@ -86,7 +88,7 @@ class ParserApiProvider(CourtProvider):
             except httpx.RequestError as exc:
                 if attempt + 1 >= self._max_retries:
                     raise CourtProviderTemporaryError(
-                        "Could not connect to Parser API"
+                        f"Could not connect to Parser API: {type(exc).__name__}: {exc}"
                     ) from exc
                 await asyncio.sleep(2**attempt)
                 continue
@@ -143,7 +145,11 @@ class ParserApiProvider(CourtProvider):
         if self._client is not None:
             return await self._client.get(url, params=params)
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
+        ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        async with httpx.AsyncClient(
+            timeout=self._timeout,
+            verify=ssl_context,
+        ) as client:
             return await client.get(url, params=params)
 
     @staticmethod
