@@ -43,4 +43,4 @@ class OllamaQueryPlanner(QueryPlanner):
             content = response.json()["message"]["content"]
         except (ValueError, KeyError, TypeError) as exc:
             raise LlmError("Ollama returned an invalid response") from exc
-        return parse_search_plan(content)
+        return parse_search_plan(content, description)

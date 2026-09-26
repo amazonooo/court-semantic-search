@@ -112,7 +112,8 @@ def _make_pdf(text: str) -> bytes:
         )
         if remaining < 0:
             raise RuntimeError("Demo PDF text does not fit on the page")
-        return document.tobytes()
+        document.subset_fonts()
+        return document.tobytes(garbage=4, deflate=True)
     finally:
         document.close()
 

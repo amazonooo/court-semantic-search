@@ -1,4 +1,5 @@
 import ssl
+from datetime import date
 
 import httpx
 import truststore
@@ -25,12 +26,22 @@ def _search_plan_json_schema() -> dict[str, object]:
                 "type": "array",
                 "items": {"type": "string"},
             },
+            "filters": {
+                "type": "object",
+                "properties": {key: {"type": ["string", "null"]} for key in (
+                    "case_number", "inn", "court", "date_from", "date_to",
+                    "dispute_type", "dispute_category",
+                )},
+                "required": ["case_number", "inn", "court", "date_from", "date_to",
+                             "dispute_type", "dispute_category"],
+                "additionalProperties": False,
+            },
             "exclude": {
                 "type": "array",
                 "items": {"type": "string"},
             },
         },
-        "required": ["queries", "must_have", "exclude"],
+        "required": ["queries", "must_have", "exclude", "filters"],
     }
 
 
@@ -58,7 +69,7 @@ class YandexQueryPlanner(QueryPlanner):
                 "reasoningOptions": {"mode": "DISABLED"},
             },
             "messages": [
-                {"role": "system", "text": SYSTEM_PROMPT},
+                {"role": "system", "text": SYSTEM_PROMPT + f" Сегодня {date.today().isoformat()}."},
                 {"role": "user", "text": description},
             ],
             "jsonSchema": {
@@ -91,11 +102,13 @@ class YandexQueryPlanner(QueryPlanner):
                 )
         except httpx.RequestError as exc:
             raise LlmError(
-                f"Yandex AI Studio is unreachable: {type(exc).__name__}: {exc}"
+                f"Yandex AI Studio is unreachable ({type(exc).__name__})"
             ) from exc
 
         if response.status_code != 200:
-            detail = response.text.strip().replace("\n", " ")
+            if response.status_code == 403:
+                raise LlmError("Yandex AI Studio denied access (HTTP 403); check the service account, API key scope and folder permissions")
+            detail = response.text.strip().replace("\n", " ").replace(self._api_key, "[REDACTED]")[:500]
             raise LlmError(
                 f"Yandex AI Studio returned HTTP "
                 f"{response.status_code}: {detail}"
@@ -110,4 +123,4 @@ class YandexQueryPlanner(QueryPlanner):
                 "Yandex AI Studio returned an invalid response"
             ) from exc
 
-        return parse_search_plan(content)
+        return parse_search_plan(content, description)

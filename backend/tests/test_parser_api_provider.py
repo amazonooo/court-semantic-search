@@ -78,3 +78,53 @@ async def test_download_pdf_decodes_base64() -> None:
         result = await provider.download_pdf("https://kad.arbitr.ru/test.pdf")
 
     assert result == expected_pdf
+
+
+@pytest.mark.asyncio
+async def test_parser_redacts_keys_in_httpx_logs_and_error_text(caplog):
+    from backend.app.providers.base import CourtProviderAccessError
+    key = 'do-not-print-this-key'
+    def handler(request):
+        return httpx.Response(403, json={'error':f'Invalid key {key}', 'error_code':40301})
+    caplog.set_level('INFO', logger='httpx')
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = ParserApiProvider(api_key=key, base_url='https://parser-api.com/test', client=client)
+        with pytest.raises(CourtProviderAccessError) as exc:
+            await provider.search_documents(DocumentSearchParams(text='налог'))
+    assert key not in str(exc.value)
+    assert key not in caplog.text
+    assert '[REDACTED]' in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_retries_share_one_wall_clock_budget():
+    import asyncio
+    from time import monotonic
+    from backend.app.providers.base import CourtProviderTemporaryError
+    calls = []
+    async def handler(request):
+        calls.append(1)
+        return httpx.Response(503, text='<html>Unavailable</html>')
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = ParserApiProvider(api_key='test', base_url='https://parser-api.com/test',
+                                     client=client, max_retries=3, timeout_seconds=.04)
+        start = monotonic()
+        with pytest.raises(CourtProviderTemporaryError):
+            await provider.search_documents(DocumentSearchParams(text='налог'))
+    assert monotonic() - start < .4
+    assert len(calls) == 1  # Backoff is cancelled within the same total budget.
+
+
+@pytest.mark.asyncio
+async def test_case_id_disagreement_with_pdf_url_is_not_a_valid_search_result():
+    from backend.app.providers.base import CourtProviderTemporaryError
+    def handler(request):
+        return httpx.Response(200, json={'done': 1, 'items': [{
+            'CaseId': '11111111-1111-1111-1111-111111111111',
+            'CaseNumber': 'А40-1/2025',
+            'FileUrl': 'https://kad.arbitr.ru/Document/Pdf/22222222-2222-2222-2222-222222222222/doc/file.pdf',
+        }]})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = ParserApiProvider(api_key='test', base_url='https://parser-api.com/test', client=client)
+        with pytest.raises(CourtProviderTemporaryError):
+            await provider.search_documents(DocumentSearchParams(text='налог'))

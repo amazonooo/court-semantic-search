@@ -10,7 +10,7 @@ from ...models import (
 )
 from ...providers.base import CourtProvider
 from ...providers.factory import get_court_provider
-from ...services.pdf import PdfExtractionError, extract_pdf_text
+from ...services.pdf import PdfExtractionError, extract_pdf_text_async
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -36,7 +36,7 @@ async def extract_document_text(
         )
 
     try:
-        text = extract_pdf_text(pdf_bytes)
+        text = await extract_pdf_text_async(pdf_bytes)
     except PdfExtractionError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

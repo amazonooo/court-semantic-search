@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, Response
 
 from ...config import get_settings
+from ...build_info import BUILD_ID
 from ...providers.mock import MockCourtProvider
 
 
@@ -13,7 +14,8 @@ router = APIRouter(tags=["demo"])
 
 @router.get("/demo", include_in_schema=False)
 async def demo_page() -> FileResponse:
-    return FileResponse(Path(__file__).resolve().parents[4] / "frontend" / "demo.html")
+    return FileResponse(Path(__file__).resolve().parents[4] / "frontend" / "demo.html",
+                        headers={"Cache-Control": "no-store"})
 
 
 @router.get("/api/demo/status")
@@ -21,14 +23,16 @@ async def demo_status() -> dict[str, str | bool]:
     settings = get_settings()
     court_provider = settings.court_provider.strip().lower()
     llm_provider = settings.llm_provider.strip().lower()
-    court_ready = court_provider == "mock" or bool(settings.parser_api_key)
+    court_ready = court_provider == "mock" or (court_provider == "parser_api" and bool(settings.parser_api_key))
 
-    if llm_provider == "yandex":
-        llm_ready = bool(settings.yandex_api_key and settings.yandex_folder_id)
+    if llm_provider == "gigachat":
+        llm_ready = bool(settings.gigachat_auth_key)
         return {
+            "build_id": BUILD_ID,
+            "configuration_only": True,
             "court_provider": court_provider,
             "llm_provider": llm_provider,
-            "model": settings.yandex_model,
+            "model": settings.gigachat_plan_model,
             "provider_ready": court_ready,
             "llm_ready": llm_ready,
             "ready": court_ready and llm_ready,
@@ -38,6 +42,8 @@ async def demo_status() -> dict[str, str | bool]:
 
     if llm_provider != "ollama":
         return {
+            "build_id": BUILD_ID,
+            "configuration_only": True,
             "court_provider": court_provider,
             "llm_provider": llm_provider,
             "model": "",
@@ -63,7 +69,9 @@ async def demo_status() -> dict[str, str | bool]:
         available = False
         ready = False
     return {
-        "court_provider": court_provider,
+        "build_id": BUILD_ID,
+            "configuration_only": True,
+            "court_provider": court_provider,
         "llm_provider": settings.llm_provider,
         "model": settings.ollama_model,
         "provider_ready": court_ready,

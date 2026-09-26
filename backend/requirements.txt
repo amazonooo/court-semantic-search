@@ -5,3 +5,5 @@ pydantic-settings>=2.10,<3.0
 httpx>=0.28,<1.0
 truststore>=0.10,<1.0
 PyMuPDF>=1.26,<2.0
+
+pymorphy3>=2,<3

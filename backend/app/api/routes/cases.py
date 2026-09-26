@@ -1,7 +1,10 @@
+import asyncio
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from ...config import Settings, get_settings
 from ...models import (
     CaseDocumentTextResponse,
     CaseSearchParams,
@@ -14,9 +17,9 @@ from ...models import (
     SemanticSearchRequest,
     SemanticSearchResponse,
 )
-from ...llm.base import LlmError, QueryPlanner
-from ...llm.factory import get_query_planner
-from ...providers.base import CourtProvider, CourtProviderError
+from ...llm.base import LlmError, QueryPlanner, RelevanceReranker
+from ...llm.factory import get_query_planner, get_relevance_reranker
+from ...providers.base import CourtProvider
 from ...providers.factory import get_court_provider
 from ...services.case_text import (
     PreferredDocumentNotFoundError,
@@ -34,9 +37,15 @@ router = APIRouter(prefix="/api/cases", tags=["cases"])
 async def plan_case_search(
     request: SemanticSearchRequest,
     planner: Annotated[QueryPlanner, Depends(get_query_planner)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> SearchPlan:
     try:
-        return request.plan or await planner.plan(request.description)
+        plan = request.plan or await asyncio.wait_for(
+            planner.plan(request.description), settings.plan_timeout_seconds
+        )
+        return plan
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Search planning exceeded its time budget") from exc
     except LlmError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -46,10 +55,12 @@ async def search_cases_with_evidence(
     request: EvidenceSearchRequest,
     provider: Annotated[CourtProvider, Depends(get_court_provider)],
     planner: Annotated[QueryPlanner, Depends(get_query_planner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    reranker: Annotated[RelevanceReranker | None, Depends(get_relevance_reranker)],
 ) -> EvidenceSearchResponse:
     try:
-        return await SemanticSearchService(provider, planner).search_with_evidence(request)
-    except (LlmError, CourtProviderError) as exc:
+        return await SemanticSearchService(provider, planner, settings, reranker=reranker).search_with_evidence(request)
+    except LlmError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
@@ -58,10 +69,11 @@ async def semantic_search_cases(
     request: SemanticSearchRequest,
     provider: Annotated[CourtProvider, Depends(get_court_provider)],
     planner: Annotated[QueryPlanner, Depends(get_query_planner)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> SemanticSearchResponse:
     try:
-        return await SemanticSearchService(provider, planner).search(request)
-    except (LlmError, CourtProviderError) as exc:
+        return await SemanticSearchService(provider, planner, settings).search(request)
+    except LlmError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 

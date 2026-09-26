@@ -24,7 +24,7 @@ class DemoPlanner(QueryPlanner):
 
 
 @pytest.mark.asyncio
-async def test_demo_finds_exact_scheme_ahead_of_partial_matches() -> None:
+async def test_demo_ranks_lexical_evidence_and_keeps_partial_candidates_visible() -> None:
     result = await SemanticSearchService(MockCourtProvider(), DemoPlanner()).search_with_evidence(
         EvidenceSearchRequest(
             description="Компания присоединила заемщика и учла проценты по займу и убытки",
@@ -36,9 +36,10 @@ async def test_demo_finds_exact_scheme_ahead_of_partial_matches() -> None:
     assert result.items[0].case.preferred_document_id == "demo-tax-decision"
     assert result.items[0].coverage == 1.0
     assert "присоединило" in result.items[0].excerpt
-    assert all(item.coverage < 1.0 for item in result.items[1:])
-    assert any("заем" in item.missing_terms for item in result.items[1:])
-    assert any("присоединение" in item.missing_terms for item in result.items[1:])
+    assert len(result.items) == 3
+    assert result.items[0].verification_status == "terms_found"
+    assert all(item.verification_status != "terms_found" for item in result.items[1:])
+    assert result.items[0].missing_terms == []
 
 
 def test_demo_pdf_is_downloadable_and_extractable() -> None:
@@ -56,11 +57,11 @@ def test_demo_page_is_served() -> None:
     with TestClient(app) as client:
         page = client.get("/demo")
     assert page.status_code == 200
-    assert "Yandex LLM" in page.text
-    assert "/api/cases/semantic-search" in page.text
+    assert "GigaChat" in page.text
+    assert "/api/cases/search-with-evidence" in page.text
 
 
-def test_demo_status_reports_yandex_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_demo_status_reports_gigachat_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     from backend.app.api.routes import demo as demo_routes
 
     monkeypatch.setattr(
@@ -69,10 +70,9 @@ def test_demo_status_reports_yandex_configuration(monkeypatch: pytest.MonkeyPatc
         lambda: SimpleNamespace(
             court_provider="parser_api",
             parser_api_key="parser-key",
-            llm_provider="yandex",
-            yandex_api_key="yandex-key",
-            yandex_folder_id="folder-1",
-            yandex_model="yandexgpt-lite",
+            llm_provider="gigachat",
+            gigachat_auth_key="gigachat-key",
+            gigachat_plan_model="GigaChat-2",
         ),
     )
 
@@ -80,10 +80,13 @@ def test_demo_status_reports_yandex_configuration(monkeypatch: pytest.MonkeyPatc
         response = client.get("/api/demo/status")
 
     assert response.status_code == 200
-    assert response.json() == {
+    payload = response.json()
+    assert payload.pop("configuration_only") is True
+    assert len(payload.pop("build_id")) == 12
+    assert payload == {
         "court_provider": "parser_api",
-        "llm_provider": "yandex",
-        "model": "yandexgpt-lite",
+        "llm_provider": "gigachat",
+        "model": "GigaChat-2",
         "provider_ready": True,
         "llm_ready": True,
         "ready": True,

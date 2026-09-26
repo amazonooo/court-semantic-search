@@ -195,3 +195,17 @@ def test_extract_latest_substantive_text_uses_explicit_role() -> None:
     payload = response.json()
     assert payload["role"] == "latest_substantive"
     assert payload["document_id"] == "substantive-resolution"
+
+
+def test_foreign_document_cannot_be_attached_to_case():
+    case = make_case()
+    case.preferred_document = case.preferred_document.model_copy(update={'case_id': 'foreign-case'})
+    provider = FakeCourtProvider({})
+    app.dependency_overrides[get_court_provider] = lambda: provider
+    try:
+        with TestClient(app) as client:
+            response = client.post('/api/cases/extract-preferred-text', json=case.model_dump(mode='json'))
+        assert response.status_code == 404
+        assert not provider.downloaded_urls
+    finally:
+        app.dependency_overrides.clear()
