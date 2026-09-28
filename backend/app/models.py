@@ -309,6 +309,7 @@ class SearchPlan(BaseModel):
 class SemanticSearchRequest(BaseModel):
     filters: SearchFilters | None = None
     description: str = Field(min_length=20, max_length=5000)
+    max_queries: int = Field(default=3, ge=1, le=10)
     max_pages_per_query: int = Field(default=1, ge=1, le=5)
     plan: SearchPlan | None = None
 
@@ -330,7 +331,7 @@ class SemanticSearchResponse(BaseModel):
 
 
 class EvidenceSearchRequest(SemanticSearchRequest):
-    max_cases: int = Field(default=6, ge=1, le=20)
+    max_cases: int = Field(default=2, ge=1, le=20)
     semantic_reranking: bool = False
 
 
@@ -369,6 +370,7 @@ class SearchDiagnostics(BaseModel):
     search_calls: int = 0
     pdf_calls: int = 0
     http_attempts: int = 0
+    parser_successes: int = 0
     pdf_downloaded: int = 0
     pdf_checked: int = 0
     pdf_bytes: int = 0

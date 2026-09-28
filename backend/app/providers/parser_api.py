@@ -148,6 +148,8 @@ class ParserApiProvider(CourtProvider):
                 if http_status != 200:
                     raise CourtProviderError(f"Unexpected Parser API status: {http_status}", error_code=error_code)
                 if payload.get("done") == 1:
+                    if diagnostics:
+                        diagnostics.parser_successes += 1
                     return payload
                 if payload.get("error"):
                     raise CourtProviderError(

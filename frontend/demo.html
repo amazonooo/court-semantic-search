@@ -75,6 +75,14 @@
       <button id="sample" class="secondary" type="button">Вернуть пример</button>
       <span class="small">Оценки сохраняются в этом браузере. Их можно выгрузить файлом и передать команде.</span>
     </div>
+    <div class="row">
+      <label for="search-depth" style="margin:0">Расход Parser API</label>
+      <select id="search-depth">
+        <option value="economy">Экономный: до 3 поисков и 2 PDF (до 5 операций)</option>
+        <option value="extended">Расширенный: до 10 поисков и 6 PDF (до 16 операций)</option>
+      </select>
+      <span class="small">Повторный запуск снова обращается к Parser API. План GigaChat сам по себе его лимит не расходует.</span>
+    </div>
     <label class="small" style="font-weight:400"><input id="semantic-consent" type="checkbox" style="width:auto"> Разрешаю дополнительно отправить в GigaChat обязательные признаки и до пяти коротких фрагментов каждого проверенного PDF для оценки сходства дел и проверки каждого признака. Описание ситуации уже используется GigaChat для поискового плана. Дополнительный вызов модели может тарифицироваться.</label>
     <div class="row"><button id="export-feedback" class="secondary" type="button">Скачать оценки</button><span id="feedback-status" class="small" aria-live="polite"></span></div>
     <div id="error" class="error" role="alert" hidden></div>
@@ -245,7 +253,10 @@
   function render(data) {
     activeRun.request_id = data.diagnostics?.request_id;
     activeRun.documents = data.items.map(item => item.evidence_document || item.source_document).filter(Boolean);
-    const metrics = `Найдено кандидатов: ${data.case_count} · рассмотрено дел: ${data.cases_attempted} · прочитано PDF: ${data.cases_checked}. Порядок — по оценке сходства; непроверенные PDF внизу.`;
+    const d = data.diagnostics || {};
+    activeRun.parser_usage = {search_calls: d.search_calls, pdf_calls: d.pdf_calls,
+      http_attempts: d.http_attempts, parser_successes: d.parser_successes};
+    const metrics = `Найдено кандидатов: ${data.case_count} · рассмотрено дел: ${data.cases_attempted} · прочитано PDF: ${data.cases_checked}. Выполнено формулировок: ${d.queries_executed?.length ?? 0} из ${data.plan.queries.length}. Parser API: ${d.search_calls ?? 0} поисков, ${d.pdf_calls ?? 0} загрузок PDF, ${d.http_attempts ?? 0} HTTP-попыток, ${d.parser_successes ?? 0} успешных ответов. Порядок — по оценке сходства; непроверенные PDF внизу.`;
     renderPlan(data.plan, metrics);
     $('warnings').replaceChildren(...(data.warnings || []).map(text => el('p', text, 'small')));
     $('cases').replaceChildren();
@@ -300,7 +311,9 @@
   $('search').addEventListener('click', async () => {
     const description = $('description').value.trim();
     if (description.length < 20) { $('error').textContent = 'Опишите ситуацию минимум в 20 символах.'; $('error').hidden = false; return; }
+    const expanded = $('search-depth').value === 'extended';
     activeRun = {id: crypto.randomUUID(), description, build_id: buildId,
+      searchMode: expanded ? 'extended' : 'economy',
       semanticRequested: $('semantic-consent').checked, created_at: new Date().toISOString()};
     $('cases').replaceChildren(); $('warnings').replaceChildren(); $('results').hidden = true;
     $('error').hidden = true;
@@ -324,8 +337,9 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           description,
+          max_queries: expanded ? 10 : 3,
           max_pages_per_query: 1,
-          max_cases: 6,
+          max_cases: expanded ? 6 : 2,
           semantic_reranking: activeRun.semanticRequested,
           plan,
         }),

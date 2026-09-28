@@ -24,10 +24,22 @@ class DemoPlanner(QueryPlanner):
 
 
 @pytest.mark.asyncio
+async def test_default_search_checks_at_most_two_pdfs() -> None:
+    result = await SemanticSearchService(MockCourtProvider(), DemoPlanner()).search_with_evidence(
+        EvidenceSearchRequest(
+            description="Компания присоединила заемщика и учла проценты по займу и убытки",
+        )
+    )
+    assert result.case_count == 3
+    assert result.cases_attempted == result.diagnostics.pdf_calls == 2
+
+
+@pytest.mark.asyncio
 async def test_demo_ranks_lexical_evidence_and_keeps_partial_candidates_visible() -> None:
     result = await SemanticSearchService(MockCourtProvider(), DemoPlanner()).search_with_evidence(
         EvidenceSearchRequest(
             description="Компания присоединила заемщика и учла проценты по займу и убытки",
+            max_cases=3,
         )
     )
 

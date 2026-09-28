@@ -3,8 +3,9 @@ import base64
 import httpx
 import pytest
 
-from backend.app.models import DocumentSearchParams
+from backend.app.models import DocumentSearchParams, SearchDiagnostics
 from backend.app.providers.parser_api import ParserApiProvider
+from backend.app.services.search_runtime import active_diagnostics
 
 
 @pytest.mark.asyncio
@@ -37,21 +38,27 @@ async def test_search_documents_normalizes_parser_response() -> None:
             },
         )
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        provider = ParserApiProvider(
-            api_key="test-key",
-            base_url="https://parser-api.com/parser/ras_arbitr_api",
-            client=client,
-        )
-        result = await provider.search_documents(
-            DocumentSearchParams(caseNumber="А53-30848/2015")
-        )
+    diagnostics = SearchDiagnostics(request_id="test")
+    token = active_diagnostics.set(diagnostics)
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = ParserApiProvider(
+                api_key="test-key",
+                base_url="https://parser-api.com/parser/ras_arbitr_api",
+                client=client,
+            )
+            result = await provider.search_documents(
+                DocumentSearchParams(caseNumber="А53-30848/2015")
+            )
+    finally:
+        active_diagnostics.reset(token)
 
     assert result.count == 1
     assert result.items[0].case_number == "А53-30848/2015"
     assert result.items[0].instance_level == 2
     assert result.items[0].registration_date.isoformat() == "2018-12-21"
     assert result.items[0].document_id
+    assert diagnostics.http_attempts == diagnostics.parser_successes == 1
 
 
 @pytest.mark.asyncio

@@ -103,11 +103,24 @@ async def test_server_caps_client_work_and_keeps_all_user_plan_terms():
 
 
 @pytest.mark.asyncio
-async def test_default_budget_executes_ten_short_formulations():
+async def test_default_budget_executes_only_three_of_ten_formulations():
     queries = [f'поисковая фраза {index}' for index in range(10)]
     source = FakeProvider()
     result = await SemanticSearchService(source, None, settings()).search(
         request().model_copy(update={'plan': SearchPlan(queries=queries)})
+    )
+    assert result.query_count == 3
+    assert [text for text, _page in source.calls] == queries[:3]
+    assert result.partial
+    assert '3 из 10' in result.warnings[0]
+
+
+@pytest.mark.asyncio
+async def test_ten_formulations_require_explicit_request():
+    queries = [f'поисковая фраза {index}' for index in range(10)]
+    source = FakeProvider()
+    result = await SemanticSearchService(source, None, settings()).search(
+        request(max_queries=10).model_copy(update={'plan': SearchPlan(queries=queries)})
     )
     assert result.query_count == 10
     assert [text for text, _page in source.calls] == queries

@@ -63,9 +63,14 @@ class SemanticSearchService:
         matched: dict[str, set[str]] = defaultdict(set)
         first_seen: dict[str, int] = {}
         max_pages = min(request.max_pages_per_query, self._settings.search_max_pages_per_query)
-        queries = plan.queries[:self._settings.search_max_queries]
-        if len(queries) < len(plan.queries) or max_pages < request.max_pages_per_query:
-            warnings.append('Объём поиска ограничен серверным лимитом; проверены не все формулировки или страницы.')
+        queries = plan.queries[:min(request.max_queries, self._settings.search_max_queries)]
+        if len(queries) < len(plan.queries):
+            warnings.append(
+                f'Отправлено к источнику {len(queries)} из {len(plan.queries)} формулировок плана; '
+                'остальные сохранены как варианты и не расходовали лимит Parser API.'
+            )
+        if max_pages < request.max_pages_per_query:
+            warnings.append('Просмотрены не все запрошенные страницы из-за серверного ограничения.')
         for query in queries:
             if runtime.remaining() <= 0:
                 warnings.append('Лимит времени поиска исчерпан; возвращены доступные кандидаты.')
@@ -147,7 +152,7 @@ class SemanticSearchService:
                 selected.add(case_key(retrieved.items[0]))
             # Include candidates unique to each formulation when available;
             # repeated broad hits must not consume every PDF slot.
-            for query in retrieved.plan.queries[:self._settings.search_max_queries]:
+            for query in runtime.diagnostics.queries_executed:
                 candidate = next((item for item in retrieved.items
                                   if item.matched_queries == [query] and case_key(item) not in selected), None)
                 if candidate is None:
