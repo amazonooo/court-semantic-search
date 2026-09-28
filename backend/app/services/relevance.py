@@ -159,13 +159,17 @@ def score_textual_relevance(text: str, description: str, must_have: list[str],
     found = {match.term for match in matches if match.term in weights}
     overall = sum(weights[term] for term in found) / total_weight
     per_passage = []
+    description_words = _search_words(description, [])
     for index, passage in enumerate(passages.values()):
         contextual = {match.term for match in find_evidence(passage, must_have)}
         ratio = sum(weights[term] for term in contextual) / total_weight
+        topical_words = {word[:6] for word in _WORD.findall(_normalize(passage))}
+        topical_overlap = len(topical_words & description_words)
         # The beginning usually states the claim; a citation may merely repeat
-        # a legal formula, so reward multiple facts appearing in one passage.
-        per_passage.append((ratio, -index, passage, contextual))
-    best, _, quote, joined_terms = max(per_passage)
+        # a legal formula. When no full criterion matches, show the passage
+        # closest to the description instead of an uninformative document header.
+        per_passage.append((ratio, topical_overlap, -index, passage, contextual))
+    best, _, _, quote, joined_terms = max(per_passage)
     opening = per_passage[0][0]
     raw = 4 * (0.45 * overall + 0.40 * best + 0.15 * opening)
     score = min(4, max(0, round(raw)))

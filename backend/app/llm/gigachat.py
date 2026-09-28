@@ -176,7 +176,7 @@ class GigaChatQueryPlanner(QueryPlanner):
     async def plan(self, description: str) -> SearchPlan:
         content = await self._api.complete(
             model=self._model, system=SYSTEM_PROMPT + f" Сегодня {date.today().isoformat()}.",
-            user=description, schema=_plan_schema(), max_tokens=1200, timeout=45,
+            user=description, schema=_plan_schema(), max_tokens=1800, timeout=45,
         )
         return parse_search_plan(content, description)
 

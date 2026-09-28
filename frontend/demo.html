@@ -91,7 +91,7 @@
     </section>
     <section class="panel">
       <h2>Найденные дела и фрагменты</h2>
-      <p class="small">Дела упорядочены по оценке сходства. Для каждого обязательного признака показана отдельная проверка слов в PDF. Совпадение слов не подтверждает факты или юридическую релевантность.</p>
+      <p class="small">Дела упорядочены по оценке сходства. Для каждого обязательного признака показана отдельная проверка слов в PDF. Совпадение слов не подтверждает факты или юридическую релевантность. Оценка акта — полезность конкретного PDF; оценка дела — соответствие запросу дела, в котором может быть несколько актов.</p>
       <div id="warnings" role="status"></div><div id="cases"></div>
     </section>
   </section>
@@ -235,16 +235,16 @@
     const filters = Object.entries(plan.filters || {}).filter(([key, value]) => value).map(([key, value]) => `${filterLabels[key] || key}: ${value}`);
     $('filters').textContent = filters.length ? 'Ограничения: ' + filters.join(' · ') : 'Дополнительные ограничения не указаны.';
   }
-  function safeSourceLink(document) {
+  function safeSourceLink(document, checked) {
     if (!document?.file_url) return null;
     const url = new URL(document.file_url, location.origin);
     if (!['http:', 'https:'].includes(url.protocol)) return null;
-    const link = el('a', 'Открыть этот PDF'); link.href = url.href;
+    const link = el('a', checked ? 'Открыть проверенный PDF' : 'Открыть PDF из источника (проверка не завершена)'); link.href = url.href;
     link.target = '_blank'; link.rel = 'noopener noreferrer'; return link;
   }
   function render(data) {
     activeRun.request_id = data.diagnostics?.request_id;
-    activeRun.documents = data.items.filter(item => item.evidence_document).map(item => item.evidence_document);
+    activeRun.documents = data.items.map(item => item.evidence_document || item.source_document).filter(Boolean);
     const metrics = `Найдено кандидатов: ${data.case_count} · рассмотрено дел: ${data.cases_attempted} · прочитано PDF: ${data.cases_checked}. Порядок — по оценке сходства; непроверенные PDF внизу.`;
     renderPlan(data.plan, metrics);
     $('warnings').replaceChildren(...(data.warnings || []).map(text => el('p', text, 'small')));
@@ -262,8 +262,10 @@
     data.items.forEach(item => {
       const card = el('article', undefined, 'case'), head = el('div', undefined, 'case-head'), title = el('div');
       const document = item.evidence_document;
+      const sourceDocument = document || item.source_document;
+      const verified = Boolean(document) && !item.text_error;
       title.append(el('h3', item.case.case_number || item.case.case_id));
-      if (document) title.append(el('div', `${document.document_type || 'Акт'} · ${document.court || ''} · ${document.registration_date || 'дата неизвестна'}`, 'small'));
+      if (sourceDocument) title.append(el('div', `${sourceDocument.document_type || 'Акт'} · ${sourceDocument.court || ''} · ${sourceDocument.registration_date || 'дата неизвестна'}${verified ? '' : ' · PDF не проверен'}`, 'small'));
       const rank = item.relevance_score === null || item.relevance_score === undefined
         ? 'Сходство не оценено' : item.relevance_status === 'semantic'
           ? `Сходство ситуации: ${item.relevance_score} из 5`
@@ -282,13 +284,15 @@
       if (item.text_error) card.append(el('p', `PDF не проверен: ${item.text_error}`, 'error'));
       (item.exclusion_evidence || []).forEach(match => { card.append(el('strong', `Слово исключения: ${match.term}`), highlightedQuote(match, 'exclusion')); });
       if (item.excluded_terms.length) card.append(el('p', `Слова исключения: ${item.excluded_terms.join('; ')}. Проверьте контекст упоминания.`, 'small'));
-      if (document) {
-        const link = safeSourceLink(document);
-        card.append(el('p', `ID дела: ${item.case.case_id} · ID проверенного документа: ${document.document_id}`, 'small'));
+      if (sourceDocument) {
+        const link = safeSourceLink(sourceDocument, verified);
+        card.append(el('p', `ID дела: ${item.case.case_id} · ID ${verified ? 'проверенного документа' : 'документа из источника'}: ${sourceDocument.document_id}`, 'small'));
         if (link) card.append(link);
-        card.append(rating('document', document.document_id, 'Оценить судебный акт'));
       }
-      card.append(rating('case', item.case.case_id || item.case.case_number, 'Оценить соответствие дела'));
+      if (verified) {
+        card.append(rating('document', document.document_id, 'Оценить полезность этого судебного акта (PDF)'));
+      }
+      card.append(rating('case', item.case.case_id || item.case.case_number, 'Оценить соответствие дела запросу'));
       $('cases').append(card);
     });
   }

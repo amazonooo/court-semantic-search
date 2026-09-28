@@ -9,10 +9,11 @@ import pymorphy3
 from ..models import EvidenceMatch, TextHighlight
 
 # Grammatical function words, never subjects, outcomes, or legal categories.
-_STOP_WORDS = frozenset('в во на по к ко с со из за от до для при о об и или а но что как это'.split())
+_STOP_WORDS = frozenset('в во на по к ко с со из за от до для при о об и или либо а но что как это'.split())
 _ANALYZER_LOCK = Lock()
 _TOKEN = re.compile(r'[а-яёa-z0-9][а-яёa-z0-9\u0300-\u036f]*', re.I)
 _SENTENCE_BREAK = re.compile(r'(?<=[.!?])\s+(?=[А-ЯЁA-Z«])|\n\s*\n')
+_ALTERNATIVE = re.compile(r'\s*/\s*|\s+(?:или|либо)\s+', re.I)
 
 
 def normalize(value: str) -> str:
@@ -62,32 +63,38 @@ def find_evidence(text: str, terms: list[str]) -> list[EvidenceMatch]:
               for m in _TOKEN.finditer(source)]
     matches = []
     for term in terms:
-        required = {word_forms(word) for word in _TOKEN.findall(normalize(term))
-                    if word not in _STOP_WORDS}
-        if not required:
-            continue
-        # All words in a criterion must occur together in a short passage, not
-        # scattered across hundreds of pages or inside unrelated longer words.
-        for i, (word, start, _) in enumerate(tokens):
-            if not any(word & forms for forms in required):
+        alternatives = [
+            {word_forms(word) for word in _TOKEN.findall(normalize(part))
+             if word not in _STOP_WORDS}
+            for part in _ALTERNATIVE.split(term)
+        ]
+        # A slash or "или" joins alternative facts. Only one branch has to be
+        # supported, while words within that branch still share a short passage.
+        for required in alternatives:
+            if not required:
                 continue
-            window = tokens[i:i + max(18, len(required) * 3)]
-            seen = set()
-            for index, (word, _, end) in enumerate(window):
-                if end - start > 300:
+            # All words in one alternative must occur together in a short
+            # passage, not across pages or inside unrelated longer words.
+            for i, (word, start, _) in enumerate(tokens):
+                if not any(word & forms for forms in required):
+                    continue
+                window = tokens[i:i + max(18, len(required) * 3)]
+                seen = set()
+                for index, (word, _, end) in enumerate(window):
+                    if end - start > 300:
+                        break
+                    seen.update(word)
+                    if all(forms & seen for forms in required):
+                        quote, quote_start = _source_quote(source, start, end)
+                        highlights = [TextHighlight(start=token_start - quote_start,
+                                                    end=token_end - quote_start)
+                                      for token_forms, token_start, token_end in window[:index + 1]
+                                      if any(token_forms & forms for forms in required)]
+                        matches.append(EvidenceMatch(term=term, quote=quote,
+                                                     highlights=highlights))
+                        break
+                if matches and matches[-1].term == term:
                     break
-                seen.update(word)
-                if all(forms & seen for forms in required):
-                    quote, quote_start = _source_quote(source, start, end)
-                    highlights = [TextHighlight(start=token_start - quote_start,
-                                                end=token_end - quote_start)
-                                  for token_forms, token_start, token_end in window[:index + 1]
-                                  if any(token_forms & forms for forms in required)]
-                    matches.append(EvidenceMatch(term=term, quote=quote,
-                                                 highlights=highlights))
-                    break
-            else:
-                continue
             if matches and matches[-1].term == term:
                 break
     return matches

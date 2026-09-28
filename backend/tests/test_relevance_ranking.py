@@ -71,6 +71,17 @@ def test_bankruptcy_request_is_not_excluded_by_topic():
     assert result.score >= 3
 
 
+def test_zero_match_quote_uses_topical_body_instead_of_document_header():
+    description = 'Налоговый спор об аренде имущества с последующим выкупом и расходах'
+    terms = ['длительное время аренда имущества', 'выкуп имущества по полной стоимости']
+    text = ('Арбитражный суд рассмотрел материалы дела. ' * 55 +
+            'В материалах обсуждался договор аренды с правом выкупа, '
+            'платежи и расходы на приобретение объекта. ' * 4)
+    result = score_textual_relevance(text, description, terms, [], find_evidence(text, terms))
+    assert result.score == 0
+    assert 'правом выкупа' in result.quote
+
+
 def test_model_quote_highlights_only_verbatim_source_text():
     source = "Общество присоединило заемщика и затем учло проценты по займу при расчете налога."
     quote, highlights = grounded_model_quote(source, "учло проценты по займу")

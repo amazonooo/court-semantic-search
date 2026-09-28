@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     retrieval_timeout_seconds: float = Field(default=45.0, gt=0, le=90)
     plan_timeout_seconds: float = Field(default=45.0, gt=0, le=60)
     relevance_timeout_seconds: float = Field(default=35.0, gt=0, le=45)
-    search_max_queries: int = Field(default=3, ge=2, le=5)
+    search_max_queries: int = Field(default=10, ge=2, le=10)
     search_max_pages_per_query: int = Field(default=1, ge=1, le=5)
     search_max_cases: int = Field(default=6, ge=1, le=10)
     search_max_pdf_downloads: int = Field(default=6, ge=1, le=10)

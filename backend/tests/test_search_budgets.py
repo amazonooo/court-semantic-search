@@ -73,6 +73,9 @@ async def test_pdf_timeout_is_not_counted_as_checked():
     assert result.cases_attempted == 1
     assert result.cases_checked == result.diagnostics.pdf_downloaded == 0
     assert result.items[0].verification_status == 'unverified'
+    assert result.items[0].source_document.document_id == source.document.document_id
+    assert result.items[0].source_document.file_url == source.document.file_url
+    assert result.items[0].text_error == 'Источник не успел загрузить PDF за отведённое время'
     assert result.items[0].coverage is None
     assert result.partial
 
@@ -91,12 +94,24 @@ async def test_server_caps_client_work_and_keeps_all_user_plan_terms():
     query.plan = SearchPlan(queries=['a query', 'b query', 'c query', 'd query', 'e query'],
                            exclude=['явное исключение'])
     before = query.plan.model_dump()
-    result = await SemanticSearchService(source, None, settings()).search_with_evidence(query)
+    result = await SemanticSearchService(source, None, settings(search_max_queries=3)).search_with_evidence(query)
     assert len(source.calls) == 3
     assert all(p.page == 1 for p in source.calls)
     assert result.diagnostics.pdf_calls == result.cases_attempted == 6
     assert result.partial
     assert query.plan.model_dump() == before == result.plan.model_dump()
+
+
+@pytest.mark.asyncio
+async def test_default_budget_executes_ten_short_formulations():
+    queries = [f'поисковая фраза {index}' for index in range(10)]
+    source = FakeProvider()
+    result = await SemanticSearchService(source, None, settings()).search(
+        request().model_copy(update={'plan': SearchPlan(queries=queries)})
+    )
+    assert result.query_count == 10
+    assert [text for text, _page in source.calls] == queries
+    assert not result.partial
 
 
 @pytest.mark.asyncio

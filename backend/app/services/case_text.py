@@ -21,7 +21,7 @@ class PreferredDocumentNotFoundError(RuntimeError):
     pass
 
 
-def _document_for_role(case: CourtCase, role: str):
+def document_for_role(case: CourtCase, role: str):
     if role == "factual_base":
         return (
             case.factual_base_document
@@ -46,7 +46,7 @@ async def extract_case_document_text(
     *,
     role: str,
 ) -> CaseDocumentTextResponse:
-    document = _document_for_role(case, role)
+    document = document_for_role(case, role)
     if document is None or not document.file_url:
         raise PreferredDocumentNotFoundError(
             f"{role.replace('_', ' ').capitalize()} PDF document was not found in the case"

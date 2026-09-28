@@ -13,7 +13,7 @@ from ..providers.base import (
     CourtProvider, CourtProviderAccessError, CourtProviderError,
     CourtProviderValidationError,
 )
-from .case_text import PreferredDocumentNotFoundError, extract_case_document_text
+from .case_text import PreferredDocumentNotFoundError, document_for_role, extract_case_document_text
 from .cases import CaseAggregationService
 from .evidence import find_evidence
 from .pdf import PdfExtractionError
@@ -168,8 +168,10 @@ class SemanticSearchService:
             async def check_one(item):
                 nonlocal attempted
                 async with semaphore:
+                    source_document = document_for_role(item.case, 'factual_base')
                     if runtime.remaining() <= 0:
                         return EvidenceCase(case=item.case, matched_queries=item.matched_queries,
+                                            source_document=source_document,
                                             text_error='Лимит времени проверки PDF исчерпан')
                     attempted += 1
                     try:
@@ -181,9 +183,18 @@ class SemanticSearchService:
                             raise PdfExtractionError('PDF не содержит извлекаемого текста; требуется OCR')
                     except (CourtProviderAccessError, CourtProviderValidationError) as exc:
                         return exc
-                    except (PreferredDocumentNotFoundError, PdfExtractionError,
-                            CourtProviderError, TimeoutError) as exc:
+                    except SearchBudgetExceeded:
                         return EvidenceCase(case=item.case, matched_queries=item.matched_queries,
+                                            source_document=source_document,
+                                            text_error='Источник не успел загрузить PDF за отведённое время')
+                    except TimeoutError:
+                        return EvidenceCase(case=item.case, matched_queries=item.matched_queries,
+                                            source_document=source_document,
+                                            text_error='Время проверки PDF истекло')
+                    except (PreferredDocumentNotFoundError, PdfExtractionError,
+                            CourtProviderError) as exc:
+                        return EvidenceCase(case=item.case, matched_queries=item.matched_queries,
+                                            source_document=source_document,
                                             text_error=str(exc))
                     runtime.diagnostics.pdf_checked += 1
                     start = monotonic()
@@ -203,6 +214,7 @@ class SemanticSearchService:
                     except TimeoutError:
                         return EvidenceCase(
                             case=item.case, matched_queries=item.matched_queries,
+                            source_document=source_document,
                             evidence_document=extracted.document,
                             text_error='Проверка признаков превысила общий лимит времени',
                         )
@@ -220,6 +232,7 @@ class SemanticSearchService:
                               'partial_terms' if evidence else 'no_terms')
                     return EvidenceCase(
                         case=item.case, matched_queries=item.matched_queries,
+                        source_document=source_document,
                         evidence_document=extracted.document, evidence=evidence, exclusion_evidence=excluded,
                         excerpt=evidence[0].quote if evidence else None,
                         matched_terms=matched_terms, missing_terms=missing,

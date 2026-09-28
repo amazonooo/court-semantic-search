@@ -283,7 +283,7 @@ SearchTerm = Annotated[str, Field(min_length=1, max_length=300)]
 
 class SearchPlan(BaseModel):
     filters: SearchFilters = Field(default_factory=SearchFilters)
-    queries: list[SearchTerm] = Field(min_length=2, max_length=5)
+    queries: list[SearchTerm] = Field(min_length=2, max_length=10)
     must_have: list[SearchTerm] = Field(default_factory=list, max_length=10)
     exclude: list[SearchTerm] = Field(default_factory=list, max_length=10)
 
@@ -379,6 +379,7 @@ class SearchDiagnostics(BaseModel):
 
 
 class EvidenceCase(BaseModel):
+    source_document: CourtDocument | None = None
     evidence_document: CourtDocument | None = None
     evidence: list[EvidenceMatch] = Field(default_factory=list)
     semantic_criteria: list[CriterionAssessment] = Field(default_factory=list)

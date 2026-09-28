@@ -1,4 +1,15 @@
 from backend.app.services.evidence import find_evidence
+import pytest
+
+
+@pytest.mark.parametrize('separator', ['/', ' или ', ' либо '])
+def test_alternative_criterion_matches_either_branch(separator):
+    term = f'передача обязанности погашения займа{separator}передача убытков'
+    text = 'После присоединения общества произошла передача убытков правопреемнику.'
+    matches = find_evidence(text, [term])
+    assert len(matches) == 1
+    assert matches[0].term == term
+    assert 'передача убытков' in matches[0].quote
 
 
 def test_evidence_quote_shows_whole_sentence_around_supply_match():
