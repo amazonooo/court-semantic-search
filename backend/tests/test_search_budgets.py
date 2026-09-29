@@ -78,6 +78,8 @@ async def test_pdf_timeout_is_not_counted_as_checked():
     assert result.items[0].text_error == 'Источник не успел загрузить PDF за отведённое время'
     assert result.items[0].coverage is None
     assert result.partial
+    assert 'Не удалось прочитать ни один PDF' in ' '.join(result.warnings)
+    assert 'Среди прочитанных актов' not in ' '.join(result.warnings)
 
 
 @pytest.mark.asyncio

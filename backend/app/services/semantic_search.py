@@ -304,7 +304,14 @@ class SemanticSearchService:
                     warnings.append('Лимит времени смысловой проверки исчерпан; показан предварительный текстовый ранг.')
             if attempted < retrieved.case_count:
                 warnings.append(f'Проверка ограничена: рассмотрено {attempted} из {retrieved.case_count} дел.')
-            if checked and all(item.relevance_score is None or item.relevance_score <= 1 for item in checked):
+            scored = [item for item in checked if item.relevance_score is not None]
+            if checked and not scored:
+                warnings.append(
+                    'Не удалось прочитать ни один PDF; сходство дел с запросом не оценено.'
+                    if runtime.diagnostics.pdf_checked == 0 else
+                    'Оценка сходства по полученным PDF не завершилась.'
+                )
+            elif scored and all(item.relevance_score <= 1 for item in scored):
                 warnings.append('Среди прочитанных актов не найдено убедительного текстового сходства с описанной ситуацией.')
             checked.sort(key=lambda item: (
                 item.relevance_score is None, -(item.relevance_score or 0),

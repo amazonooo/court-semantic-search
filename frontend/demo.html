@@ -132,12 +132,14 @@
   }
   function criterionChecklist(item, terms) {
     const box = el('section', undefined, 'criteria');
-    box.append(el('strong', 'Обязательные признаки в проверенном PDF'));
+    const checked = Boolean(item.evidence_document) && !item.text_error;
+    box.append(el('strong', checked
+      ? 'Обязательные признаки в проверенном PDF'
+      : 'Обязательные признаки: PDF не проверен'));
     if (!terms.length) {
       box.append(el('p', 'Модель не выделила обязательные признаки для этого запроса.', 'small'));
       return box;
     }
-    const checked = Boolean(item.evidence_document) && !item.text_error;
     for (const term of terms) {
       const match = (item.evidence || []).find(entry => entry.term === term);
       const model = (item.semantic_criteria || []).find(entry => entry.term === term);
@@ -284,7 +286,8 @@
       head.append(title, el('span', rank, `badge ${item.relevance_score >= 3 ? 'good' : 'warn'}`));
       card.append(head);
       if (item.relevance_reason) card.append(el('p', item.relevance_reason));
-      card.append(el('p', `${labels[item.verification_status] || 'Требует проверки'}. Найдено по формулировкам: ${item.matched_queries.length} из ${data.plan.queries.length}. Словесных признаков: ${item.matched_terms.length} из ${data.plan.must_have.length}.`, 'small'));
+      const executedQueries = data.diagnostics?.queries_executed?.length ?? data.plan.queries.length;
+      card.append(el('p', `${labels[item.verification_status] || 'Требует проверки'}. Источник вернул дело по ${item.matched_queries.length} из ${executedQueries} отправленных формулировок. Словесных признаков: ${item.matched_terms.length} из ${data.plan.must_have.length}.`, 'small'));
       if (item.matched_queries.length) card.append(el('p', `Формулировки, по которым источник вернул дело: ${item.matched_queries.join('; ')}.`, 'small'));
       card.append(criterionChecklist(item, data.plan.must_have));
       if (item.relevance_quote) {
