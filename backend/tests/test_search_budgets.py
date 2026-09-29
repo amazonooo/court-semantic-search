@@ -118,6 +118,24 @@ async def test_default_budget_executes_only_three_of_ten_formulations():
 
 
 @pytest.mark.asyncio
+async def test_small_budget_covers_distinct_facets_of_plan():
+    queries = [
+        'аренда имущества право выкупа',
+        'выкуп арендованного имущества полная стоимость',
+        'повторные платежи за арендуемое имущество',
+        'экономическая целесообразность двойной оплаты аренды',
+        'налоговый вычет покупка арендованного имущества',
+    ]
+    source = FakeProvider()
+    result = await SemanticSearchService(source, None, settings()).search(
+        request().model_copy(update={'plan': SearchPlan(queries=queries)})
+    )
+    assert result.diagnostics.queries_executed == [queries[0], queries[3], queries[4]]
+    assert len(source.calls) == 3
+    assert result.plan.queries == queries
+
+
+@pytest.mark.asyncio
 async def test_ten_formulations_require_explicit_request():
     queries = [f'поисковая фраза {index}' for index in range(10)]
     source = FakeProvider()

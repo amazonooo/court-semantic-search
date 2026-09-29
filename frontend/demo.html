@@ -235,7 +235,10 @@
     if (activeRun.planRendered) return;
     activeRun.plan = plan; activeRun.planRendered = true;
     $('queries').replaceChildren(...plan.queries.map((query, i) => {
-      const row = el('div', undefined, 'query'); row.append(el('p', query), rating('query', String(i), 'Оценить формулировку')); return row;
+      const row = el('div', undefined, 'query');
+      const usage = el('span', '', 'query-usage chip'); usage.hidden = true;
+      row.append(el('p', query), usage, rating('query', String(i), 'Оценить формулировку'));
+      return row;
     }));
     $('must-have').replaceChildren(...plan.must_have.map((term, i) => {
       const row = el('div'); row.append(el('span', term, 'chip'), rating('criterion', String(i), 'Оценить признак')); return row;
@@ -260,6 +263,13 @@
       http_attempts: d.http_attempts, parser_successes: d.parser_successes};
     const metrics = `Найдено кандидатов: ${data.case_count} · рассмотрено дел: ${data.cases_attempted} · прочитано PDF: ${data.cases_checked}. Выполнено формулировок: ${d.queries_executed?.length ?? 0} из ${data.plan.queries.length}. Parser API: ${d.search_calls ?? 0} поисков, ${d.pdf_calls ?? 0} загрузок PDF, ${d.http_attempts ?? 0} HTTP-попыток, ${d.parser_successes ?? 0} успешных ответов. Порядок — по оценке сходства; непроверенные PDF внизу.`;
     renderPlan(data.plan, metrics);
+    const executed = new Set(d.queries_executed || []);
+    $('queries').querySelectorAll('.query').forEach((row, i) => {
+      const usage = row.querySelector('.query-usage');
+      usage.textContent = executed.has(data.plan.queries[i]) ? 'Отправлено' : 'Не отправлено';
+      usage.className = executed.has(data.plan.queries[i]) ? 'query-usage chip good' : 'query-usage chip';
+      usage.hidden = false;
+    });
     $('warnings').replaceChildren(...(data.warnings || []).map(text => el('p', text, 'small')));
     $('cases').replaceChildren();
     if (!data.items.length) {

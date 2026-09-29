@@ -1,6 +1,8 @@
 import asyncio
 from collections import defaultdict
+import re
 from time import monotonic
+import unicodedata
 
 from ..config import Settings, get_settings
 from ..llm.base import LlmError, QueryPlanner, RelevanceReranker
@@ -21,6 +23,32 @@ from .relevance import RelevanceCandidate, grounded_model_quote, model_passages,
 from .search_runtime import (
     BoundedProvider, SearchBudgetExceeded, SearchRuntime, active_diagnostics,
 )
+
+
+_QUERY_WORD = re.compile(r'[а-яa-z]{4,}', re.I)
+
+
+def _select_queries(queries: list[str], limit: int) -> list[str]:
+    """Spend a small search budget on different facets of the plan."""
+    if len(queries) <= limit:
+        return queries[:]
+    roots = [
+        {word[:5] for word in _QUERY_WORD.findall(
+            unicodedata.normalize('NFC', query).casefold().replace('ё', 'е'))}
+        for query in queries
+    ]
+    selected = [0]
+    covered = roots[0].copy()
+    while len(selected) < limit:
+        remaining = (index for index in range(len(queries)) if index not in selected)
+        index = max(remaining, key=lambda candidate: (
+            len(roots[candidate] - covered) / max(1, len(roots[candidate])),
+            len(roots[candidate] - covered),
+            -candidate,
+        ))
+        selected.append(index)
+        covered.update(roots[index])
+    return [queries[index] for index in selected]
 
 
 class SemanticSearchService:
@@ -63,7 +91,9 @@ class SemanticSearchService:
         matched: dict[str, set[str]] = defaultdict(set)
         first_seen: dict[str, int] = {}
         max_pages = min(request.max_pages_per_query, self._settings.search_max_pages_per_query)
-        queries = plan.queries[:min(request.max_queries, self._settings.search_max_queries)]
+        queries = _select_queries(
+            plan.queries, min(request.max_queries, self._settings.search_max_queries)
+        )
         if len(queries) < len(plan.queries):
             warnings.append(
                 f'Отправлено к источнику {len(queries)} из {len(plan.queries)} формулировок плана; '
