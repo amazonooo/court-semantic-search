@@ -166,6 +166,7 @@ async def test_search_cases_expands_candidate_case_and_filters_by_case_id() -> N
         instance_level=2,
         registration_date=date(2023, 5, 20),
         document_type="Определение",
+        content_types=["Назначить дело к судебному разбирательству"],
     )
     stray_same_number = make_document(
         "stray",

@@ -126,12 +126,43 @@ def grounded_model_quote(passage: str, selected: str | None) -> tuple[str, list[
 def model_passages(text: str, description: str, terms: list[str],
                    matches: list[EvidenceMatch]) -> dict[str, str]:
     """At most five short source excerpts per PDF leave the user's machine."""
-    all_passages = list(sample_passages(text, description, terms, matches).values())
-    selected = [_short_quote(part, 1000) for part in all_passages[:4]]
     source = _SPACE.sub(" ", text).strip()
+    if not source:
+        return {}
+    if len(source) <= 4500:
+        selected = []
+        rest = source
+        while rest:
+            part = _short_quote(rest, 1000)
+            if not part:  # A malformed PDF may contain a token longer than the budget.
+                part = rest[:1000]
+            selected.append(part)
+            rest = rest[len(part):].lstrip()
+        if len(selected) <= 5:
+            return {f"P{index}": passage for index, passage in enumerate(selected, 1)}
+    selected = [_short_quote(_whole_words(source, 0, min(1000, len(source))), 1000)]
     ending = _whole_words(source, max(0, len(source) - 1000), len(source))
-    if ending and len(source) > 1500 and ending not in selected:
-        selected.append(_short_quote(ending, 1000))
+    selected.append(_short_quote(ending, 1000))
+    pool = list(sample_passages(text, description, terms, matches).values())
+    pool.extend(match.quote for match in matches)
+    pool = list(dict.fromkeys(_short_quote(_SPACE.sub(' ', part).strip(), 1000)
+                             for part in pool if part.strip()))
+    words = _search_words(description, terms)
+    term_words = [_search_words('', [term]) for term in terms]
+    def roots(part):
+        return {word[:6] for word in _WORD.findall(_normalize(part))}
+    covered = set().union(*(roots(part) for part in selected))
+    while len(selected) < 5:
+        candidates = [part for part in pool if not any(part in chosen for chosen in selected)]
+        if not candidates:
+            break
+        def quality(part):
+            present = roots(part)
+            gain = sum(len((present - covered) & term) / len(term) for term in term_words if term)
+            return (gain, len(present & words))
+        best = max(candidates, key=quality)
+        selected.append(best)
+        covered.update(roots(best))
     return {f"P{index}": passage for index, passage in enumerate(selected, 1)}
 
 

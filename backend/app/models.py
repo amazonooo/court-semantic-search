@@ -311,6 +311,7 @@ class SemanticSearchRequest(BaseModel):
     description: str = Field(min_length=20, max_length=5000)
     max_queries: int = Field(default=3, ge=1, le=10)
     max_pages_per_query: int = Field(default=1, ge=1, le=5)
+    max_search_calls: int | None = Field(default=None, ge=1, le=30)
     plan: SearchPlan | None = None
 
 
@@ -333,6 +334,7 @@ class SemanticSearchResponse(BaseModel):
 class EvidenceSearchRequest(SemanticSearchRequest):
     max_cases: int = Field(default=2, ge=1, le=20)
     semantic_reranking: bool = False
+    max_case_expansions: int = Field(default=0, ge=0, le=5)
 
 
 class TextHighlight(BaseModel):
@@ -348,7 +350,7 @@ class EvidenceMatch(BaseModel):
 
 class CriterionAssessment(BaseModel):
     term: str
-    status: Literal['supported', 'not_shown', 'unclear']
+    status: Literal['supported', 'not_shown', 'unclear', 'contradicted']
     quote: str | None = None
     highlights: list[TextHighlight] = Field(default_factory=list)
 
@@ -361,6 +363,15 @@ class SearchEvent(BaseModel):
     outcome: str
     http_status: int | None = None
     error_code: str | int | None = None
+
+
+class QueryProgress(BaseModel):
+    query: str
+    source_document_count: int = 0
+    source_pages: int = 0
+    pages_fetched: list[int] = Field(default_factory=list)
+    documents_received: int = 0
+    complete: bool = False
 
 
 class SearchDiagnostics(BaseModel):
@@ -376,6 +387,10 @@ class SearchDiagnostics(BaseModel):
     pdf_bytes: int = 0
     filtered_by_date: int = 0
     queries_executed: list[str] = Field(default_factory=list)
+    query_progress: list[QueryProgress] = Field(default_factory=list)
+    cases_expanded: int = 0
+    expansion_documents: int = 0
+    procedural_cases_skipped: int = 0
     events: list[SearchEvent] = Field(default_factory=list)
     limits: dict[str, float | int] = Field(default_factory=dict)
 
@@ -399,6 +414,9 @@ class EvidenceCase(BaseModel):
     relevance_reason: str | None = None
     relevance_quote: str | None = None
     relevance_status: str = "unverified"
+    document_status: Literal['substantive', 'procedural', 'unknown'] = 'unknown'
+    recommendation_status: Literal['confirmed', 'related', 'unverified', 'not_recommended'] = 'unverified'
+    recommendation_reason: str | None = None
 
 
 class EvidenceSearchResponse(BaseModel):
@@ -410,6 +428,10 @@ class EvidenceSearchResponse(BaseModel):
     document_count: int
     case_count: int
     cases_checked: int
+    confirmed_count: int = 0
+    related_count: int = 0
+    unverified_count: int = 0
+    rejected_count: int = 0
     items: list[EvidenceCase]
 
 SemanticSearchResponse.model_rebuild()

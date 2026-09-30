@@ -96,7 +96,8 @@ async def test_server_caps_client_work_and_keeps_all_user_plan_terms():
     query.plan = SearchPlan(queries=['a query', 'b query', 'c query', 'd query', 'e query'],
                            exclude=['явное исключение'])
     before = query.plan.model_dump()
-    result = await SemanticSearchService(source, None, settings(search_max_queries=3)).search_with_evidence(query)
+    result = await SemanticSearchService(source, None, settings(
+        search_max_queries=3, search_max_pages_per_query=1)).search_with_evidence(query)
     assert len(source.calls) == 3
     assert all(p.page == 1 for p in source.calls)
     assert result.diagnostics.pdf_calls == result.cases_attempted == 6

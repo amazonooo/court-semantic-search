@@ -20,8 +20,10 @@ class SearchBudgetExceeded(TimeoutError):
 
 
 class SearchRuntime:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, *, max_search_calls: int | None = None):
         self.settings = settings
+        self.search_call_limit = min(max_search_calls or settings.search_max_search_calls,
+                                     settings.search_max_search_calls)
         self.started = monotonic()
         self.deadline = self.started + settings.search_timeout_seconds
         self.phase = "retrieval"
@@ -34,6 +36,7 @@ class SearchRuntime:
                 "operation_seconds": settings.parser_api_timeout_seconds,
                 "relevance_seconds": settings.relevance_timeout_seconds,
                 "max_queries": settings.search_max_queries,
+                "max_search_calls": self.search_call_limit,
                 "max_pages_per_query": settings.search_max_pages_per_query,
                 "max_cases": settings.search_max_cases,
                 "max_pdf_downloads": settings.search_max_pdf_downloads,
@@ -81,6 +84,8 @@ class BoundedProvider(CourtProvider):
             raise SearchBudgetExceeded("Search time budget exhausted")
         diagnostics = self.runtime.diagnostics
         if operation == "search":
+            if diagnostics.search_calls >= self.runtime.search_call_limit:
+                raise SearchBudgetExceeded("Search call budget exhausted")
             diagnostics.search_calls += 1
         else:
             if diagnostics.pdf_calls >= self.runtime.settings.search_max_pdf_downloads:

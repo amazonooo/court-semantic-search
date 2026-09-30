@@ -16,6 +16,9 @@ _SUBSTANTIVE_DOCUMENT_TYPES = (
     "судебный приказ",
 )
 _SUBSTANTIVE_CONTENT_MARKERS = (
+    "признании сделки",
+    "включении требований в реестр",
+    "привлечении к субсидиарной ответственности",
     "удовлетворить",
     "отказать",
     "взыскать",
@@ -27,6 +30,10 @@ _SUBSTANTIVE_CONTENT_MARKERS = (
     "утвердить мировое соглашение",
 )
 _PROCEDURAL_CONTENT_MARKERS = (
+    "прекратить производство",
+    "принять отказ от иска",
+    "об отложении рассмотрения",
+    "о принятии заявления",
     "принять к производству",
     "назначить дело",
     "назначить судебное разбирательство",
@@ -40,7 +47,6 @@ _PROCEDURAL_CONTENT_MARKERS = (
     "исправить опечатку",
 )
 _PROCEDURAL_TYPE_MARKERS = (
-    "определени",
     "приняти",
     "назначени",
     "отложени",
@@ -355,6 +361,16 @@ class CaseAggregationService:
         return any(marker in content for marker in _PROCEDURAL_CONTENT_MARKERS) or any(
             marker in document_type for marker in _PROCEDURAL_TYPE_MARKERS
         )
+
+    @classmethod
+    def document_status(cls, document: CourtDocument | None) -> str:
+        if document is None:
+            return 'unknown'
+        if cls._is_procedural(document):
+            return 'procedural'
+        if cls._is_substantive(document):
+            return 'substantive'
+        return 'unknown'
 
     @classmethod
     def _is_substantive(cls, document: CourtDocument) -> bool:
