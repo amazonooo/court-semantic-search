@@ -57,8 +57,18 @@ _RELEVANCE_PROMPT = (
     "следует из содержания указанного фрагмента; not_shown — в этих фрагментах "
     "признак не показан; unclear — данных недостаточно или смысл неоднозначен. "
     "Одних совпавших слов, цитаты нормы или фонового упоминания недостаточно для "
-    "supported. Не делай вывод об отсутствии факта во всем PDF, если он не виден "
-    "в переданных фрагментах. Для supported обязательно укажи ID подтверждающего "
+    "supported. Проверяй совокупность условий в одной ситуации: объект сделки, "
+    "роли, направление и последовательность событий, предмет требования. "
+    "Внутри условия с «или» достаточно одной допустимой альтернативы; "
+    "между разными условиями требуется совместное выполнение. ИФНС в банкротстве "
+    "не доказывает налоговый предмет; товары не являются приобретённой компанией; "
+    "косвенное упоминание дивидендов не подтверждает их включение в стоимость. "
+    "Если цитата прямо показывает иной предмет, объект или направление событий, "
+    "верни contradicted с точной цитатой. Невидимый факт помечай not_shown или "
+    "unclear, а не contradicted. Оценку 4 или 5 ставь только при подтверждении "
+    "всех обязательных условий. Не делай вывод об отсутствии факта во всем PDF, "
+    "если он не виден в переданных фрагментах. Для supported и contradicted "
+    "обязательно укажи ID подтверждающего "
     "фрагмента и короткую точную цитату из него (до 200 символов, без пересказа). "
     "Если точную цитату выбрать нельзя, верни пустую строку. Для остальных используй "
     "ID подходящего фрагмента или пустую строку и пустую цитату. "
@@ -69,7 +79,7 @@ _RELEVANCE_PROMPT = (
 
 def _relevance_schema(criterion_ids: list[str]) -> dict:
     criterion = {"type": "object", "properties": {
-        "status": {"type": "string", "enum": ["supported", "not_shown", "unclear"]},
+        "status": {"type": "string", "enum": ["supported", "not_shown", "unclear", "contradicted"]},
         "passage_id": {"type": "string"},
         "quote": {"type": "string"},
     }, "required": ["status", "passage_id", "quote"], "additionalProperties": False}
@@ -234,19 +244,18 @@ class GigaChatRelevanceReranker(RelevanceReranker):
                     continue
                 status, source, quote = (entry.get(name) for name in
                                          ("status", "passage_id", "quote"))
-                if status not in {"supported", "not_shown", "unclear"}:
+                if status not in {"supported", "not_shown", "unclear", "contradicted"}:
                     continue
-                if status == "supported" and (not isinstance(source, str) or
-                                              source not in by_key[key].passages):
-                    continue
+                valid_quote = (isinstance(quote, str) and isinstance(source, str) and
+                    source in by_key[key].passages and bool(quote) and quote == quote.strip() and
+                    len(quote) <= 240 and quote in by_key[key].passages[source])
+                if status in {"supported", "contradicted"} and not valid_quote:
+                    status = "unclear"
                 criteria.append(CriterionJudgment(
                     term=term, status=status,
                     passage_id=source if isinstance(source, str) and
                     source in by_key[key].passages else None,
-                    quote=quote if (status == "supported" and isinstance(quote, str) and
-                                    isinstance(source, str) and source in by_key[key].passages and
-                                    quote and quote == quote.strip() and len(quote) <= 240 and
-                                    quote in by_key[key].passages[source]) else None,
+                    quote=quote if status in {"supported", "contradicted"} and valid_quote else None,
                 ))
             judgments.append(RelevanceJudgment(
                 key=key, score=None if score == -1 else score,

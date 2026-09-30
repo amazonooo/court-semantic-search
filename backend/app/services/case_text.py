@@ -3,6 +3,7 @@ from time import monotonic
 from ..models import CaseDocumentTextResponse, CourtCase, PreferredDocumentTextResponse
 from ..providers.base import CourtProvider
 from .pdf import extract_pdf_text_async
+from .cases import CaseAggregationService
 from .search_runtime import active_diagnostics
 
 
@@ -22,6 +23,15 @@ class PreferredDocumentNotFoundError(RuntimeError):
 
 
 def document_for_role(case: CourtCase, role: str):
+    if role == "search_evidence":
+        substantive = [document for document in case.documents
+                       if CaseAggregationService.document_status(document) == 'substantive']
+        first_instance = [document for document in substantive if document.instance_level == 1]
+        candidates = first_instance or substantive or [
+            document for document in case.documents
+            if CaseAggregationService.document_status(document) == 'unknown'
+        ]
+        return max(candidates, key=CaseAggregationService._factual_base_sort_key) if candidates else None
     if role == "factual_base":
         return (
             case.factual_base_document
