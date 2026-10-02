@@ -66,14 +66,14 @@
 <main>
   <div class="eyebrow">Court Semantic Search · MVP</div>
   <h1>Поиск судебной практики по описанию ситуации</h1>
-  <p class="intro">GigaChat составляет поисковый план. Сервис получает кандидатов и проверяет PDF. При разрешении смысловой проверки модель сравнивает предмет спора и совокупность обязательных условий с цитатами из акта. Подтверждённые по фрагментам совпадения показаны отдельно от кандидатов, требующих проверки. Сверяйте выводы с оригиналом.</p>
+  <p class="intro">GigaChat составляет поисковый план. Сервис получает кандидатов и проверяет PDF. При разрешении смысловой проверки модель сравнивает предмет спора и совокупность обязательных условий с цитатами из акта. Подтверждённые цитатами совпадения показаны отдельно от кандидатов, требующих проверки. Сверяйте выводы с оригиналом.</p>
 
   <section class="panel">
     <div class="status"><span id="status-dot" class="dot"></span><span id="status-text">Проверяем подключение…</span><span id="status-badge" class="badge">GigaChat</span></div>
     <label for="description">Описание ситуации</label>
     <textarea id="description">После присоединения компании-заемщика правопреемник учел проценты по займу и убытки при расчете налога на прибыль. Налоговая оспаривает деловую цель реорганизации и налоговую выгоду.</textarea>
     <div class="row">
-      <button id="search">Найти похожие дела</button>
+      <button id="search">Подготовить план поиска</button>
       <button id="sample" class="secondary" type="button">Вернуть пример</button>
       <span class="small">Оценки сохраняются в этом браузере. Их можно выгрузить файлом и передать команде.</span>
     </div>
@@ -81,28 +81,44 @@
       <label for="search-depth" style="margin:0">Расход Parser API</label>
       <select id="search-depth">
         <option value="economy">Экономный: до 3 поисков и 2 PDF (до 5 операций)</option>
-        <option value="extended">Расширенный: 4 формулировки, до 2 страниц; до 10 поисков и 6 PDF</option>
+        <option value="extended">Расширенный: формулировки плана, до 2 страниц; до 10 поисков и 6 PDF</option>
+        <option value="full" selected>По периодам с продолжением: до 10 поисков и 6 PDF за порцию</option>
       </select>
-      <span class="small">Повторный запуск снова обращается к Parser API. План GigaChat сам по себе его лимит не расходует.</span>
+      <span class="small">Поиск страниц и загрузка PDF расходуют операции источника. Извлечение текста и повторная проверка сохранённого PDF выполняются локально. План и смысловая проверка отдельно используют GigaChat.</span>
     </div>
-    <label class="small" style="font-weight:400"><input id="semantic-consent" type="checkbox" style="width:auto"> Разрешаю дополнительно отправить в GigaChat обязательные признаки и до пяти коротких фрагментов каждого проверенного PDF для оценки сходства дел и проверки каждого признака. Описание ситуации уже используется GigaChat для поискового плана. Дополнительный вызов модели может тарифицироваться.</label>
+    <p class="small">Обычные режимы проверяют ограниченную часть выдачи. Режим по периодам проходит все формулировки плана за выбранные даты (без ограничения дат: с 1900 года по сегодня), дробит большие выдачи и сохраняет позицию. Каждая кнопка продолжения запускает одну порцию. Полнота зависит от доступности и охвата источника.</p>
+    <label class="small" style="font-weight:400"><input id="use-feedback" type="checkbox" checked style="width:auto"> Пропускать дела, которым я поставил 1 или 2 для того же описания. Последняя оценка действует только для этого запроса.</label>
+    <label for="reference-case" class="small">Номер подходящего дела для проверки модели (необязательно)</label>
+    <input id="reference-case" type="text" maxlength="100" placeholder="Например, А68-10855/2018">
+    <span class="small">Образец ищется отдельно по номеру и помечается в результатах. Он помогает проверить понимание условий, но не подтверждает качество поиска по описанию. Его поиск входит в лимит порции.</span>
+    <label class="small" style="font-weight:400"><input id="semantic-consent" type="checkbox" checked style="width:auto"> Разрешаю отправить в GigaChat полный извлечённый текст проверяемых решений и обязательные признаки для ответа на вопросы о фактах. Описание ситуации уже используется GigaChat для поискового плана. Длинные решения могут потребовать нескольких вызовов модели.</label>
     <p class="small">Без смысловой проверки результаты остаются предварительными: совпадение слов не подтверждает совокупность условий.</p>
-    <div class="row"><button id="export-feedback" class="secondary" type="button">Скачать оценки</button><span id="feedback-status" class="small" aria-live="polite"></span></div>
+    <div class="row"><button id="export-feedback" class="secondary" type="button">Скачать оценки</button><label for="import-feedback" class="small" style="margin:0">Загрузить ранее сохранённые оценки</label><input id="import-feedback" type="file" accept="application/json,.json"><span id="feedback-status" class="small" aria-live="polite"></span></div>
+    <label class="small" style="font-weight:400"><input id="web-consent" type="checkbox" checked style="width:auto"> Сначала поискать в интернете через Яндекс. Описание ситуации будет передано Yandex Search API.</label>
     <div id="error" class="error" role="alert" hidden></div>
   </section>
 
   <section id="results" hidden>
+    <section id="web-results" class="panel" hidden>
+      <h2>Что нашлось в интернете</h2>
+      <p class="small">Предварительные находки Яндекса со ссылками. Обязательные факты проверяются затем по полному тексту судебного решения.</p>
+      <div id="web-findings"></div>
+    </section>
     <section class="panel">
       <h2>Как модель поняла запрос</h2>
       <div id="metrics" class="small"></div><div id="filters" class="small"></div>
       <div class="grid">
         <div class="mini"><strong>Поисковые формулировки</strong><div id="queries"></div></div>
-        <div class="mini"><strong>Обязательные признаки</strong><div id="must-have" class="chips"></div><strong style="margin-top:14px">Исключить</strong><div id="exclude" class="chips"></div></div>
+        <div class="mini"><strong>Обязательные признаки</strong><div id="must-have"></div><strong style="margin-top:14px">Исключить</strong><div id="exclude" class="chips"></div></div>
       </div>
+      <p id="review-help" class="small" role="status">Проверьте текст каждой строки. Если он не подходит, исправьте его, затем поставьте ОК.</p>
+      <button id="start-approved" type="button" disabled>Искать по согласованному плану</button>
     </section>
-    <section class="panel">
+    <section id="case-results" class="panel" hidden>
       <h2>Результаты проверки</h2>
-      <p class="small">Для рекомендации модель должна подтвердить цитатами все обязательные условия в одной ситуации. «Не виден во фрагментах» означает недостаток подтверждения. Техническое качество PDF, рассмотрение вопроса по существу и релевантность дела оцениваются отдельно.</p>
+      <div id="coverage-summary" class="small" role="status"></div>
+      <button id="continue-search" class="secondary" type="button" hidden>Продолжить поиск и проверку</button>
+      <p class="small">Для рекомендации модель должна подтвердить цитатами все обязательные условия в одной ситуации. «Подтверждение не найдено» означает недостаток оснований в прочитанном материале. Техническое качество PDF, рассмотрение вопроса по существу и релевантность дела оцениваются отдельно.</p>
       <div id="warnings" role="status"></div><div id="cases"></div>
     </section>
   </section>
@@ -151,10 +167,10 @@
         ? match ? 'Словоформы найдены' : 'Словоформы не найдены'
         : 'PDF не проверен', `chip ${checked ? match ? 'good' : 'missing' : ''}`));
       if (checked && activeRun.semanticRequested) {
-        const modelLabel = model?.status === 'supported' ? 'GigaChat: признак виден'
-          : model?.status === 'contradicted' ? 'GigaChat: показано несоответствие'
-          : model?.status === 'not_shown' ? 'GigaChat: не виден во фрагментах'
-          : model?.status === 'unclear' ? 'GigaChat: неясно'
+        const modelLabel = model?.status === 'supported' ? 'Да — факт подтверждён'
+          : model?.status === 'contradicted' ? 'Нет — показано противоположное'
+          : model?.status === 'not_shown' ? 'Подтверждение не найдено'
+          : model?.status === 'unclear' ? 'Недостаточно данных'
           : 'GigaChat: не оценил';
         const modelClass = model?.status === 'supported' ? 'model-good'
           : model?.status === 'not_shown' ? 'missing' : 'model-unclear';
@@ -162,20 +178,15 @@
       }
       row.append(head);
       if (checked && match) row.append(highlightedQuote(match));
-      if (checked && model?.quote && model.status !== 'not_shown') {
-        if (model.highlights?.length) {
-          row.append(el('div', 'Цитата, на которой основана оценка GigaChat:', 'small'),
-                     highlightedQuote(model, 'model'));
-        } else {
-          const source = el('details');
-          source.append(el('summary', 'Фрагмент для оценки GigaChat'), el('blockquote', model.quote));
-          row.append(source);
-        }
+      if (checked && model?.reason) row.append(el('p', model.reason, 'small'));
+      const citations = model?.citations?.length ? model.citations : model?.highlights?.length ? [model] : [];
+      for (const citation of citations) {
+        row.append(el('div', 'Основание ответа в решении:', 'small'), highlightedQuote(citation, 'model'));
       }
       box.append(row);
     }
-    box.append(el('p', 'Здесь проверяются слова и их формы в одном фрагменте текста. Синонимы могут быть пропущены. Совпадение слов не доказывает юридический факт, а их отсутствие не доказывает отсутствие факта.', 'small'));
-    if (activeRun.semanticRequested) box.append(el('p', 'GigaChat видит только короткие фрагменты: «не виден» не означает, что признака нет во всём PDF. Положительную оценку тоже сверяйте с оригиналом.', 'small'));
+    box.append(el('p', 'Словесные отметки показывают только совпадения слов и их форм. Синонимы могут быть пропущены. Совпадение слов не доказывает юридический факт, а их отсутствие не доказывает отсутствие факта.', 'small'));
+    if (activeRun.semanticRequested) box.append(el('p', item.analysis_complete ? 'Модель прочитала весь извлечённый текст акта и сопоставила факты между его частями. Сверяйте ответы и цитаты с оригиналом.' : 'Анализ полного текста не завершён. Отсутствие подтверждения не означает отсутствия факта.', 'small'));
     return box;
   }
   async function checkStatus() {
@@ -197,7 +208,8 @@
       $('status-text').textContent = 'Не удалось проверить состояние сервиса.';
     }
   }
-  let buildId = '', activeRun = null;
+  let buildId = '', activeRun = null, reviewInputs = [], busy = false;
+  let continuationToken = null, accumulatedItems = new Map();
   let feedback = [];
   function packFeedback(entries) {
     const runs = Object.fromEntries(entries.filter(entry => entry.run?.id).map(entry => [entry.run.id, entry.run]));
@@ -220,6 +232,42 @@
   try { feedback = unpackFeedback(JSON.parse(localStorage.getItem('court-feedback-v2') || localStorage.getItem('court-feedback-v1') || '[]')); }
   catch { $('feedback-status').textContent = 'Локальное хранилище недоступно; скачайте оценки до закрытия страницы.'; }
   if (!Array.isArray(feedback)) feedback = [];
+  function descriptionKey(value) {
+    return (value || '').normalize('NFC').toLowerCase().replaceAll('ё', 'е').replace(/\s+/g, ' ').trim();
+  }
+  function rejectedCases(description) {
+    if (!$('use-feedback').checked) return [];
+    const latest = new Map();
+    for (const entry of feedback) {
+      if (entry.kind !== 'case' || typeof entry.target !== 'string' || !entry.target ||
+          descriptionKey(entry.run?.description) !== descriptionKey(description)) continue;
+      const previous = latest.get(entry.target);
+      if (!previous || (entry.updated_at || '') >= (previous.updated_at || '')) latest.set(entry.target, entry);
+    }
+    return [...latest.values()].filter(entry => entry.rating === 1 || entry.rating === 2)
+      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || '')).slice(0, 1000).map(entry => entry.target);
+  }
+  $('import-feedback').addEventListener('change', async event => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error('Файл оценок больше 10 МБ.');
+      const raw = JSON.parse(await file.text());
+      if (!Array.isArray(raw) && !(raw?.version === 2 && Array.isArray(raw.entries))) throw new Error('Неизвестный формат файла оценок.');
+      const entries = unpackFeedback(raw).filter(entry => entry.run?.id &&
+        typeof entry.run.description === 'string' && typeof entry.target === 'string' &&
+        typeof entry.key === 'string' && typeof entry.updated_at === 'string' &&
+        [null, 1, 2, 3, 4, 5].includes(entry.rating));
+      if (!entries.length) throw new Error('В файле нет корректных оценок с описанием запроса.');
+      for (const entry of entries) {
+        const index = feedback.findIndex(saved => saved.key === entry.key);
+        if (index < 0) feedback.push(entry);
+        else if (entry.updated_at >= feedback[index].updated_at) feedback[index] = entry;
+      }
+      persistFeedback();
+    } catch (error) { $('feedback-status').textContent = `Оценки не загружены: ${error.message}`; }
+    event.target.value = '';
+  });
   function rating(kind, target, label) {
     const box = el('fieldset');
     box.append(el('legend', label, 'small'));
@@ -231,6 +279,8 @@
     const comment = el('input'); comment.type = 'text'; comment.placeholder = 'Комментарий';
     comment.setAttribute('aria-label', `Комментарий: ${label}`); comment.maxLength = 2000;
     const run = activeRun;
+    const saved = feedback.find(entry => entry.key === `${run.id}:${kind}:${target}`);
+    if (saved) { select.value = saved.rating ?? ''; comment.value = saved.comment || ''; }
     const save = () => {
       const key = `${run.id}:${kind}:${target}`;
       const entry = { key, kind, target, rating: select.value ? Number(select.value) : null,
@@ -248,25 +298,63 @@
     link.href = url; link.download = 'court-search-feedback.json'; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
+  function updateReview() {
+    if (!activeRun || busy) { $('start-approved').disabled = true; return; }
+    const allOK = reviewInputs.every(row => row.checkbox.checked && row.input.value.trim());
+    const queries = reviewInputs.filter(row => row.kind === 'queries').map(row => row.input.value.trim().normalize('NFC'));
+    const mustHave = reviewInputs.filter(row => row.kind === 'must_have').map(row => row.input.value.trim().normalize('NFC'));
+    const unique = new Set(queries.map(text => descriptionKey(text))).size === queries.length
+      && new Set(mustHave.map(text => descriptionKey(text))).size === mustHave.length;
+    const sameDescription = $('description').value.trim() === activeRun.description;
+    $('start-approved').disabled = activeRun.submitted || !allOK || !unique || !sameDescription;
+    $('review-help').textContent = !sameDescription ? 'Описание изменилось. Подготовьте новый план.'
+      : activeRun.submitted ? 'Поиск запущен по этому согласованному тексту. Для новых правок подготовьте новый план.'
+      : !unique ? 'Строки в каждом списке должны различаться. Исправьте повтор и подтвердите его.'
+      : allOK ? 'Все строки согласованы. Можно запускать поиск.' : 'Исправьте неподходящие строки и поставьте ОК каждой формулировке и обязательному признаку.';
+  }
   function renderPlan(plan, message) {
-    $('results').hidden = false;
-    $('metrics').textContent = message;
-    // Plan is rendered once per run so in-progress ratings survive the results.
+    $('results').hidden = false; $('metrics').textContent = message;
     if (activeRun.planRendered) return;
-    activeRun.plan = plan; activeRun.planRendered = true;
-    $('queries').replaceChildren(...plan.queries.map((query, i) => {
+    activeRun.plan = plan; activeRun.planRendered = true; reviewInputs = [];
+    const renderRows = (kind, values) => values.map((text, i) => {
       const row = el('div', undefined, 'query');
+      const input = el('textarea'); input.value = text; input.maxLength = 300;
+      input.style.minHeight = '76px'; input.rows = 2;
+      input.setAttribute('aria-label', `${kind === 'queries' ? 'Формулировка' : 'Обязательный признак'} ${i + 1}`);
+      const label = el('label', undefined, 'small'); label.style.margin = '8px 0';
+      const checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.style.width = 'auto';
+      checkbox.setAttribute('aria-label', `ОК: ${kind === 'queries' ? 'формулировка' : 'признак'} ${i + 1}`);
+      label.append(checkbox, document.createTextNode('ОК — согласовано'));
       const usage = el('span', '', 'query-usage chip'); usage.hidden = true;
-      row.append(el('p', query), usage, rating('query', String(i), 'Оценить формулировку'));
-      return row;
-    }));
-    $('must-have').replaceChildren(...plan.must_have.map((term, i) => {
-      const row = el('div'); row.append(el('span', term, 'chip'), rating('criterion', String(i), 'Оценить признак')); return row;
-    }));
+      input.addEventListener('input', () => { checkbox.checked = false; updateReview(); });
+      checkbox.addEventListener('change', () => { input.readOnly = checkbox.checked; updateReview(); });
+      reviewInputs.push({kind, input, checkbox}); row.append(input, label, usage); return row;
+    });
+    $('queries').replaceChildren(...renderRows('queries', plan.queries));
+    $('must-have').replaceChildren(...renderRows('must_have', plan.must_have));
     chips($('exclude'), plan.exclude);
     const filterLabels = {case_number:'Номер дела', inn:'Участник', court:'Суд', date_from:'С даты', date_to:'По дату', dispute_type:'Вид спора', dispute_category:'Категория'};
     const filters = Object.entries(plan.filters || {}).filter(([key, value]) => value).map(([key, value]) => `${filterLabels[key] || key}: ${value}`);
     $('filters').textContent = filters.length ? 'Ограничения: ' + filters.join(' · ') : 'Дополнительные ограничения не указаны.';
+    updateReview();
+  }
+  function renderWeb(data) {
+    $('results').hidden = false; $('web-results').hidden = false;
+    $('web-findings').replaceChildren();
+    if (data.message) $('web-findings').append(el('p', data.message, 'small'));
+    for (const finding of data.findings || []) {
+      const box = el('div'), text = el('p', finding.text); text.style.whiteSpace = 'pre-wrap'; box.append(text);
+      for (const source of finding.sources || []) {
+        try {
+          const url = new URL(source.url);
+          if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) continue;
+          const title = source.reference_index ? `[${source.reference_index}] ${source.title}` : source.title;
+          const link = el('a', title); link.href = url.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+          const row = el('p', undefined, 'small'); row.append(link); box.append(row);
+        } catch {}
+      }
+      $('web-findings').append(box);
+    }
   }
   function safeSourceLink(document, checked) {
     if (!document?.file_url) return null;
@@ -276,20 +364,35 @@
     link.target = '_blank'; link.rel = 'noopener noreferrer'; return link;
   }
   function render(data) {
+    $('case-results').hidden = false;
+    continuationToken = data.continuation_token || null;
+    $('continue-search').hidden = !continuationToken;
+    $('continue-search').textContent = data.retrieval_complete ? 'Продолжить проверку полученных PDF' : 'Продолжить поиск и проверку';
     activeRun.request_id = data.diagnostics?.request_id;
-    activeRun.documents = data.items.map(item => item.evidence_document || item.source_document).filter(Boolean);
     const d = data.diagnostics || {};
     activeRun.parser_usage = {search_calls: d.search_calls, pdf_calls: d.pdf_calls,
       http_attempts: d.http_attempts, parser_successes: d.parser_successes};
-    activeRun.result_snapshot = data;
+    activeRun.batch_usage = [...(activeRun.batch_usage || []), {request_id: d.request_id, ...activeRun.parser_usage,
+      cases_checked: data.cases_checked, pdf_cache_hits: d.pdf_cache_hits || 0, total_seconds: d.total_seconds}];
+    for (const item of data.items) accumulatedItems.set(item.case.case_id || item.case.case_number, item);
+    activeRun.documents = [...accumulatedItems.values()].map(item => item.evidence_document || item.source_document).filter(Boolean);
+    const latestData = {...data, items: [...accumulatedItems.values()]};
+    for (const status of ['confirmed', 'related', 'unverified', 'not_recommended']) {
+      latestData[status === 'not_recommended' ? 'rejected_count' : `${status}_count`] = latestData.items.filter(item => item.recommendation_status === status).length;
+    }
+    activeRun.result_snapshot = latestData;
     if (feedback.some(entry => entry.run?.id === activeRun.id)) persistFeedback();
-    const metrics = `Найдено кандидатов: ${data.case_count} · попыток чтения PDF: ${data.cases_attempted} · прочитано PDF: ${data.cases_checked} · подтверждено по фрагментам: ${data.confirmed_count ?? 0}. Выполнено формулировок: ${d.queries_executed?.length ?? 0} из ${data.plan.queries.length}. Parser API: ${d.search_calls ?? 0} поисков, ${d.pdf_calls ?? 0} загрузок PDF, ${d.http_attempts ?? 0} HTTP-попыток, ${d.parser_successes ?? 0} успешных ответов.`;
+    const metrics = `Получено уникальных документов: ${data.document_count}, дел-кандидатов: ${data.case_count}. В этой порции: начато проверок PDF ${data.cases_attempted}, прочитано ${data.cases_checked}, из сохранённого текста ${d.pdf_cache_hits ?? 0}. Пропущено по вашим оценкам ${d.feedback_cases_skipped ?? 0}, уже проверенных в этом поиске ${d.previously_checked_cases_skipped ?? 0}, актов с другим предметом ${d.wrong_subject_cases_skipped ?? 0}. Источник: ${d.search_calls ?? 0} поисков страниц/историй дел, ${d.pdf_calls ?? 0} запросов PDF, ${d.http_attempts ?? 0} HTTP-попыток, ${d.parser_successes ?? 0} успешных ответов по учёту поставщика. Это операции этой порции; остаток подписки здесь не измеряется.`;
     renderPlan(data.plan, metrics);
+    $('coverage-summary').textContent = `${d.verification_mode === 'semantic' ? 'Смысловая проверка включена.' : 'Смысловая проверка выключена: оцениваются словоформы, юридическое совпадение не подтверждается.'} ${data.retrieval_complete ? 'Обход выдачи по всем формулировкам завершён.' : 'Обход выдачи не завершён.'} ${continuationToken ? data.retrieval_complete ? 'Часть полученных PDF ещё не проверена. Можно продолжить их проверку.' : `Можно продолжить обход. Необработанных периодов/страниц: ${d.pending_ranges ?? 0}.` : ''} Порядок выдачи и правила сочетания слов задаёт источник; точное совпадение фразы или поиск всех слов не предполагаются. Подтверждено цитатами за весь этот поиск: ${latestData.confirmed_count}.`;
     const executed = new Set(d.queries_executed || []);
     $('queries').querySelectorAll('.query').forEach((row, i) => {
       const usage = row.querySelector('.query-usage');
       const progress = d.query_progress?.find(entry => entry.query === data.plan.queries[i]);
-      usage.textContent = progress?.complete && !progress.source_document_count && !progress.documents_received
+      usage.textContent = progress?.ranges?.length
+        ? `${progress.complete ? 'Обход завершён' : 'Обход не завершён'}; периодов проверено: ${progress.ranges.filter(range => range.pages_fetched.length).length}; ${progress.ranges[0].date_from}–${progress.ranges[0].date_to}`
+        : progress?.error ? 'Ошибка источника; отсутствие документов не установлено'
+        : progress?.complete && !progress.source_document_count && !progress.documents_received
         ? 'Источник не вернул документы'
         : progress?.pages_fetched.length
         ? `Получено ${progress.pages_fetched.length} из ${progress.source_pages} страниц`
@@ -298,6 +401,11 @@
       usage.hidden = false;
     });
     $('warnings').replaceChildren(...(data.warnings || []).map(text => el('p', text, 'small')));
+    const timings = el('details');
+    timings.append(el('summary', 'Как читать статистику и время проверки'),
+      el('p', `Общее время этой порции: ${d.total_seconds ?? 0} с. Длительности отдельных операций суммируются; при параллельной загрузке PDF эта сумма может превышать общее время. HTTP-событие и событие этапа описывают одну операцию и не являются двумя списаниями. Ответ done=1 может содержать неполные данные; он не означает проверенное дело. Чтение уже загруженного текста выполняется локально.`, 'small'));
+    $('warnings').append(timings);
+    data = latestData;
     $('cases').replaceChildren();
     if (!data.confirmed_count) $('cases').append(el('p', 'В проверенной части выдачи нет совпадений, подтверждённых по всем обязательным условиям. Кандидаты и причины доступны ниже.'));
     if (!data.items.length) {
@@ -310,7 +418,7 @@
       partial_terms: 'Локальная проверка: словоформы части признаков найдены',
       no_terms: 'Локальная проверка: словоформы признаков не найдены',
       excluded: 'Локальная проверка: найдены слова исключения', unverified: 'PDF не проверен'};
-    const groupLabels = {confirmed: 'Подтверждены по совокупности условий во фрагментах', related: 'Частичное сходство', unverified: 'Требуют проверки', not_recommended: 'Слабое совпадение или иной предмет'};
+    const groupLabels = {confirmed: 'Подтверждены по совокупности условий', related: 'Частичное сходство', unverified: 'Требуют проверки', not_recommended: 'Слабое совпадение или иной предмет'};
     const groups = {};
     for (const [status, label] of Object.entries(groupLabels)) {
       const count = data.items.filter(item => (item.recommendation_status || 'unverified') === status).length;
@@ -326,6 +434,7 @@
       const sourceDocument = document || item.source_document;
       const verified = Boolean(document) && !item.text_error;
       title.append(el('h3', item.case.case_number || item.case.case_id));
+      if (item.is_reference) title.append(el('span', 'Образец, добавленный по номеру', 'badge'));
       if (sourceDocument) title.append(el('div', `${sourceDocument.document_type || 'Акт'} · ${sourceDocument.court || ''} · ${sourceDocument.registration_date || 'дата неизвестна'}${verified ? '' : ' · PDF не проверен'}`, 'small'));
       if (sourceDocument) {
         const instance = /верховн|высш.*арбитраж/i.test(sourceDocument.court || '') ? 'Высший суд'
@@ -342,8 +451,9 @@
       if (item.recommendation_reason) card.append(el('p', item.recommendation_reason));
       if (item.relevance_reason) card.append(el('p', item.relevance_reason));
       const executedQueries = data.diagnostics?.queries_executed?.length ?? data.plan.queries.length;
-      card.append(el('p', `${labels[item.verification_status] || 'Требует проверки'}. Источник вернул дело по ${item.matched_queries.length} из ${executedQueries} отправленных формулировок. Словесных признаков: ${item.matched_terms.length} из ${data.plan.must_have.length}.`, 'small'));
+      card.append(el('p', `${labels[item.verification_status] || 'Требует проверки'}. ${item.is_reference && !item.matched_queries.length ? 'Добавлено по номеру, не найдено по описанию.' : `Источник вернул дело по ${item.matched_queries.length} из ${executedQueries} отправленных формулировок.`} Словесных признаков: ${item.matched_terms.length} из ${data.plan.must_have.length}.`, 'small'));
       if (item.matched_queries.length) card.append(el('p', `Формулировки, по которым источник вернул дело: ${item.matched_queries.join('; ')}.`, 'small'));
+      card.append(el('p', `Совпало слов из согласованных формулировок во всём тексте: ${item.lexical_word_count ?? 0} из ${item.lexical_total_words ?? 0}.`, 'small'));
       card.append(criterionChecklist(item, data.plan.must_have));
       if (item.relevance_quote) {
         const source = el('details');
@@ -360,67 +470,91 @@
       }
       if (verified) {
         card.append(rating('pdf_access', document.document_id, 'Качество PDF: открывается и читается?'));
-        card.append(rating('document', document.document_id, 'Акт рассматривает нужный вопрос по существу?'));
+        card.append(rating('document', document.document_id, 'Акт рассматривает вопрос по существу?'));
       }
       card.append(rating('case', item.case.case_id || item.case.case_number, 'Оценить соответствие дела запросу'));
       groups[item.recommendation_status || 'unverified'].append(card);
     });
   }
-  $('sample').addEventListener('click', () => { $('description').value = sample; });
-  $('search').addEventListener('click', async () => {
+  $('sample').addEventListener('click', () => { $('description').value = sample; updateReview(); });
+  $('description').addEventListener('input', updateReview);
+  async function post(url, body, signal) {
+    const response = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), signal});
+    const data = await response.json();
+    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${response.status}`);
+    return data;
+  }
+  function setBusy(value) {
+    busy = value; $('search').disabled = value; $('continue-search').disabled = value;
+    $('sample').disabled = value; $('description').readOnly = value;
+    updateReview();
+  }
+  function showError(error) {
+    $('error').textContent = error.name === 'AbortError' ? 'Обработка превысила лимит ожидания. Повторите запрос или продолжите поиск.' : error.message;
+    $('error').hidden = false;
+  }
+  async function preparePlan() {
+    if (busy) return;
     const description = $('description').value.trim();
-    if (description.length < 20) { $('error').textContent = 'Опишите ситуацию минимум в 20 символах.'; $('error').hidden = false; return; }
-    const expanded = $('search-depth').value === 'extended';
-    activeRun = {id: crypto.randomUUID(), description, build_id: buildId,
-      searchMode: expanded ? 'extended' : 'economy',
-      semanticRequested: $('semantic-consent').checked, created_at: new Date().toISOString()};
-    $('cases').replaceChildren(); $('warnings').replaceChildren(); $('results').hidden = true;
-    $('error').hidden = true;
-    $('search').disabled = true;
-    $('search').textContent = 'Формируем план…';
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 180000);
+    if (description.length < 20) { showError(new Error('Опишите ситуацию минимум в 20 символах.')); return; }
+    continuationToken = null; accumulatedItems = new Map(); reviewInputs = [];
+    activeRun = {id: crypto.randomUUID(), description, build_id: buildId, created_at: new Date().toISOString()};
+    $('cases').replaceChildren(); $('warnings').replaceChildren(); $('queries').replaceChildren(); $('must-have').replaceChildren();
+    $('web-results').hidden = true; $('case-results').hidden = true; $('results').hidden = true; $('continue-search').hidden = true;
+    $('error').hidden = true; setBusy(true);
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 150000);
     try {
-      const planResponse = await fetch('/api/cases/plan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, max_pages_per_query: 1 }),
-        signal: controller.signal,
-      });
-      const plan = await planResponse.json();
-      if (!planResponse.ok) throw new Error(typeof plan.detail === 'string' ? plan.detail : `HTTP ${planResponse.status}`);
-
-      renderPlan(plan, 'GigaChat сформировал план. Теперь ищем документы в источнике судебных актов…');
-      $('search').textContent = 'Ищем документы…';
-
-      const searchResponse = await fetch('/api/cases/search-with-evidence', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description,
-          max_queries: expanded ? 4 : 3,
-          max_pages_per_query: expanded ? 2 : 1,
-          max_search_calls: expanded ? 10 : 3,
-          max_case_expansions: expanded ? 2 : 0,
-          max_cases: expanded ? 6 : 2,
-          semantic_reranking: activeRun.semanticRequested,
-          plan,
-        }),
-        signal: controller.signal,
-      });
-      const data = await searchResponse.json();
-      if (!searchResponse.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${searchResponse.status}`);
+      if ($('web-consent').checked) {
+        $('search').textContent = 'Ищем в интернете…';
+        const preview = await post('/api/cases/web-preview', {description}, controller.signal);
+        activeRun.web_preview = preview; renderWeb(preview);
+      }
+      $('search').textContent = 'Составляем план…';
+      const plan = await post('/api/cases/plan', {description}, controller.signal);
+      renderPlan(plan, 'Поиск судебных актов начнётся после ваших правок и галочек ОК.');
+    } catch (error) { showError(error); }
+    finally { clearTimeout(timeout); setBusy(false); $('search').textContent = 'Подготовить новый план'; }
+  }
+  async function runSearch(continuing=false) {
+    if (busy || !activeRun?.plan) return;
+    if (!continuing) {
+      updateReview(); if ($('start-approved').disabled) return;
+      const queries = reviewInputs.filter(row => row.kind === 'queries').map(row => row.input.value.trim().normalize('NFC'));
+      const must_have = reviewInputs.filter(row => row.kind === 'must_have').map(row => row.input.value.trim().normalize('NFC'));
+      activeRun.plan = {...activeRun.plan, queries, must_have};
+      activeRun.plan_approval = {queries: [...queries], must_have: [...must_have]};
+      activeRun.searchMode = $('search-depth').value;
+      activeRun.referenceCaseNumber = $('reference-case').value.trim() || null;
+      activeRun.semanticRequested = $('semantic-consent').checked;
+      activeRun.submitted = true;
+      for (const row of reviewInputs) { row.input.readOnly = true; row.checkbox.disabled = true; }
+    }
+    const mode = activeRun.searchMode, expanded = mode !== 'economy';
+    $('metrics').textContent = continuing ? 'Продолжаем поиск и проверку полного текста…' : 'Ищем по согласованному плану и проверяем полный текст актов…';
+    $('error').hidden = true; setBusy(true);
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 960000);
+    try {
+      const data = await post('/api/cases/search-with-evidence', {
+        description: activeRun.description, max_queries: expanded ? 10 : 3,
+        max_pages_per_query: expanded ? 2 : 1, max_search_calls: expanded ? 10 : 3,
+        max_case_expansions: expanded ? 2 : 0, max_cases: expanded ? 6 : 2,
+        semantic_reranking: activeRun.semanticRequested, coverage_mode: mode === 'full' ? 'full' : 'bounded',
+        continuation_token: continuing ? continuationToken : null,
+        excluded_case_ids: rejectedCases(activeRun.description), reference_case_number: activeRun.referenceCaseNumber,
+        plan: activeRun.plan, plan_approval: activeRun.plan_approval,
+      }, controller.signal);
       render(data);
     } catch (error) {
-      const message = error.name === 'AbortError'
-        ? 'Поиск занял больше трёх минут. Проверьте доступность источника судебных актов и повторите запрос.'
-        : error.message;
-      $('error').textContent = `Поиск не выполнен: ${message}`;
-      $('error').hidden = false;
-    } finally {
-      clearTimeout(timeout);
-      $('search').disabled = false;
-      $('search').textContent = 'Найти похожие дела';
-    }
-  });
+      showError(error);
+      if (!continuing) {
+        activeRun.submitted = false;
+        for (const row of reviewInputs) { row.checkbox.disabled = false; row.input.readOnly = row.checkbox.checked; }
+      }
+    } finally { clearTimeout(timeout); setBusy(false); }
+  }
+  $('search').addEventListener('click', preparePlan);
+  $('start-approved').addEventListener('click', () => runSearch());
+  $('continue-search').addEventListener('click', () => runSearch(true));
   checkStatus();
 </script>
 </body>

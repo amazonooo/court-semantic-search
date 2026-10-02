@@ -14,6 +14,7 @@ from ...models import (
     EvidenceSearchResponse,
     PreferredDocumentTextResponse,
     SearchPlan,
+    WebSearchRequest, WebSearchResponse,
     SemanticSearchRequest,
     SemanticSearchResponse,
 )
@@ -27,10 +28,22 @@ from ...services.case_text import (
     extract_preferred_document_text,
 )
 from ...services.cases import CaseAggregationService
+from ...services.web_search import get_web_search, WebSearch
 from ...services.pdf import PdfExtractionError
 from ...services.semantic_search import SemanticSearchService
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
+
+
+def require_plan_approval(request: SemanticSearchRequest) -> None:
+    if request.plan is None or request.plan_approval is None:
+        raise HTTPException(status_code=409, detail="Сначала проверьте план и поставьте ОК каждой формулировке и обязательному признаку")
+
+
+@router.post("/web-preview", response_model=WebSearchResponse)
+async def web_preview(request: WebSearchRequest,
+                      search: Annotated[WebSearch, Depends(get_web_search)]) -> WebSearchResponse:
+    return await search.search(request.description)
 
 
 @router.post("/plan", response_model=SearchPlan)
@@ -58,6 +71,7 @@ async def search_cases_with_evidence(
     settings: Annotated[Settings, Depends(get_settings)],
     reranker: Annotated[RelevanceReranker | None, Depends(get_relevance_reranker)],
 ) -> EvidenceSearchResponse:
+    require_plan_approval(request)
     try:
         return await SemanticSearchService(provider, planner, settings, reranker=reranker).search_with_evidence(request)
     except LlmError as exc:
@@ -71,6 +85,7 @@ async def semantic_search_cases(
     planner: Annotated[QueryPlanner, Depends(get_query_planner)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> SemanticSearchResponse:
+    require_plan_approval(request)
     try:
         return await SemanticSearchService(provider, planner, settings).search(request)
     except LlmError as exc:

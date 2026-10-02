@@ -86,6 +86,7 @@ class RelevanceCandidate:
     case_number: str
     passages: dict[str, str]
     must_have: tuple[str, ...] = ()
+    full_text: bool = False
 
 
 @dataclass(frozen=True)
@@ -98,11 +99,19 @@ class RelevanceJudgment:
 
 
 @dataclass(frozen=True)
+class SourceCitation:
+    passage_id: str
+    quote: str
+
+
+@dataclass(frozen=True)
 class CriterionJudgment:
     term: str
     status: str
     passage_id: str | None
     quote: str | None = None
+    citations: tuple[SourceCitation, ...] = ()
+    reason: str = ""
 
 
 def grounded_model_quote(passage: str, selected: str | None) -> tuple[str, list[TextHighlight]]:
@@ -220,3 +229,41 @@ def score_textual_relevance(text: str, description: str, must_have: list[str],
         reason += " В предмете акта встречается явное исключение из запроса."
     reason += " Совпадение текста ещё не подтверждает юридическое сходство."
     return TextualRelevance(score, reason, _short_quote(quote))
+
+
+def full_document_passages(text: str, size: int = 8000) -> dict[str, str]:
+    """Cover every character, with a small overlap for boundary sentences.
+
+    Segments are transport units only; the final judgment joins facts across
+    every segment of the same act. Original PDF text and quotes are preserved.
+    """
+    if not text.strip():
+        return {}
+    passages, start, index = {}, 0, 1
+    while start < len(text):
+        end = min(start + size, len(text))
+        if end < len(text):
+            boundary = text.rfind(' ', start + size // 2, end)
+            if boundary >= 0:
+                end = boundary + 1
+        passages[f'P{index}'] = text[start:end]
+        if end == len(text):
+            break
+        start = max(start + 1, end - 400)
+        index += 1
+    return passages
+
+
+def lexical_query_overlap(text: str, queries: list[str]) -> tuple[list[str], int]:
+    """Unique approved query words, with Russian inflection, anywhere in the act."""
+    from .evidence import normalize, word_forms, _TOKEN, _STOP_WORDS
+    required = {}
+    for query in queries:
+        for word in _TOKEN.findall(normalize(query)):
+            if word not in _STOP_WORDS:
+                forms = word_forms(word)
+                required.setdefault(tuple(sorted(forms)), word)
+    present = set()
+    for word in set(_TOKEN.findall(normalize(text))):
+        present.update(word_forms(word))
+    return ([word for forms, word in required.items() if present.intersection(forms)], len(required))

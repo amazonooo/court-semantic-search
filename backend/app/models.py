@@ -306,6 +306,33 @@ class SearchPlan(BaseModel):
         return self
 
 
+class PlanApproval(BaseModel):
+    queries: list[SearchTerm]
+    must_have: list[SearchTerm]
+
+
+class WebSearchRequest(BaseModel):
+    description: str = Field(min_length=20, max_length=5000)
+
+
+class WebSource(BaseModel):
+    title: str
+    url: str
+    reference_index: int | None = Field(default=None, ge=1)
+
+
+class WebFinding(BaseModel):
+    text: str
+    sources: list[WebSource]
+
+
+class WebSearchResponse(BaseModel):
+    status: Literal['found', 'empty', 'unavailable', 'error']
+    findings: list[WebFinding] = Field(default_factory=list)
+    queries: list[str] = Field(default_factory=list)
+    message: str | None = None
+
+
 class SemanticSearchRequest(BaseModel):
     filters: SearchFilters | None = None
     description: str = Field(min_length=20, max_length=5000)
@@ -313,11 +340,28 @@ class SemanticSearchRequest(BaseModel):
     max_pages_per_query: int = Field(default=1, ge=1, le=5)
     max_search_calls: int | None = Field(default=None, ge=1, le=30)
     plan: SearchPlan | None = None
+    plan_approval: PlanApproval | None = None
+    coverage_mode: Literal['bounded', 'full'] = 'bounded'
+    continuation_token: str | None = Field(default=None, max_length=100)
+    excluded_case_ids: list[SearchTerm] = Field(default_factory=list, max_length=1000)
+    reference_case_number: str | None = Field(default=None, max_length=100)
+
+    @model_validator(mode='after')
+    def validate_continuation(self):
+        if self.plan_approval is not None and (
+            self.plan is None or self.plan_approval.queries != self.plan.queries
+            or self.plan_approval.must_have != self.plan.must_have
+        ):
+            raise ValueError('Подтвердите каждую текущую формулировку и обязательный признак после правок')
+        if self.continuation_token and (self.coverage_mode != 'full' or self.plan is None):
+            raise ValueError('Continuation requires coverage_mode=full and the original plan')
+        return self
 
 
 class RetrievedCase(BaseModel):
     case: CourtCase
     matched_queries: list[str]
+    is_reference: bool = False
 
 
 class SemanticSearchResponse(BaseModel):
@@ -329,6 +373,8 @@ class SemanticSearchResponse(BaseModel):
     document_count: int
     case_count: int
     items: list[RetrievedCase]
+    continuation_token: str | None = None
+    retrieval_complete: bool = False
 
 
 class EvidenceSearchRequest(SemanticSearchRequest):
@@ -348,9 +394,17 @@ class EvidenceMatch(BaseModel):
     highlights: list[TextHighlight] = Field(default_factory=list)
 
 
+class CriterionCitation(BaseModel):
+    passage_id: str
+    quote: str
+    highlights: list[TextHighlight] = Field(default_factory=list)
+
+
 class CriterionAssessment(BaseModel):
     term: str
     status: Literal['supported', 'not_shown', 'unclear', 'contradicted']
+    reason: str | None = None
+    citations: list[CriterionCitation] = Field(default_factory=list)
     quote: str | None = None
     highlights: list[TextHighlight] = Field(default_factory=list)
 
@@ -372,6 +426,17 @@ class QueryProgress(BaseModel):
     pages_fetched: list[int] = Field(default_factory=list)
     documents_received: int = 0
     complete: bool = False
+    ranges: list['SearchRangeProgress'] = Field(default_factory=list)
+    error: str | None = None
+
+
+class SearchRangeProgress(BaseModel):
+    date_from: date
+    date_to: date
+    source_document_count: int = 0
+    source_pages: int = 0
+    pages_fetched: list[int] = Field(default_factory=list)
+    status: Literal['pending', 'complete', 'split', 'blocked', 'error'] = 'pending'
 
 
 class SearchDiagnostics(BaseModel):
@@ -391,11 +456,25 @@ class SearchDiagnostics(BaseModel):
     cases_expanded: int = 0
     expansion_documents: int = 0
     procedural_cases_skipped: int = 0
+    feedback_cases_skipped: int = 0
+    wrong_subject_cases_skipped: int = 0
+    previously_checked_cases_skipped: int = 0
+    pdf_cache_hits: int = 0
+    verification_mode: Literal['textual', 'semantic'] = 'textual'
+    retrieval_complete: bool = False
+    pending_ranges: int = 0
+    source_order: str = 'unspecified'
+    source_text_semantics: str = 'provider_defined'
     events: list[SearchEvent] = Field(default_factory=list)
     limits: dict[str, float | int] = Field(default_factory=dict)
 
 
 class EvidenceCase(BaseModel):
+    lexical_matched_words: list[str] = Field(default_factory=list)
+    lexical_word_count: int = 0
+    lexical_total_words: int = 0
+    analysis_complete: bool = False
+    analysis_scope: str = "unverified"
     source_document: CourtDocument | None = None
     evidence_document: CourtDocument | None = None
     evidence: list[EvidenceMatch] = Field(default_factory=list)
@@ -417,6 +496,7 @@ class EvidenceCase(BaseModel):
     document_status: Literal['substantive', 'procedural', 'unknown'] = 'unknown'
     recommendation_status: Literal['confirmed', 'related', 'unverified', 'not_recommended'] = 'unverified'
     recommendation_reason: str | None = None
+    is_reference: bool = False
 
 
 class EvidenceSearchResponse(BaseModel):
@@ -433,5 +513,9 @@ class EvidenceSearchResponse(BaseModel):
     unverified_count: int = 0
     rejected_count: int = 0
     items: list[EvidenceCase]
+    continuation_token: str | None = None
+    retrieval_complete: bool = False
+    verification_complete: bool = False
 
 SemanticSearchResponse.model_rebuild()
+QueryProgress.model_rebuild()

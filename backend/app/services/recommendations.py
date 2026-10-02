@@ -25,7 +25,7 @@ def assess_recommendation(item: EvidenceCase, required_terms: list[str]) -> None
                    by_term[term].status == 'contradicted' and by_term[term].highlights]
     if contradicted:
         item.recommendation_status = 'not_recommended'
-        item.recommendation_reason = 'Во фрагментах показано несоответствие условий: ' + '; '.join(contradicted)
+        item.recommendation_reason = 'В тексте показано несоответствие условий: ' + '; '.join(contradicted)
         return
     missing = [term for term in required_terms if term not in by_term or
                by_term[term].status != 'supported' or not by_term[term].highlights]
@@ -41,9 +41,9 @@ def assess_recommendation(item: EvidenceCase, required_terms: list[str]) -> None
         return
     if item.relevance_score is not None and item.relevance_score >= 4:
         item.recommendation_status = 'confirmed'
-        item.recommendation_reason = 'По переданным фрагментам модель подтвердила все обязательные условия цитатами.'
+        item.recommendation_reason = 'По проанализированному тексту модель подтвердила все обязательные условия цитатами.'
     elif item.relevance_score == 3:
         item.recommendation_status = 'related'
-        item.recommendation_reason = 'Условия видны во фрагментах, но модель оценила сходство ситуации как частичное.'
+        item.recommendation_reason = 'Условия подтверждены в тексте, но модель оценила сходство ситуации как частичное.'
     else:
-        item.recommendation_reason = 'Модель не смогла оценить сходство по полученным фрагментам.'
+        item.recommendation_reason = 'Модель не смогла оценить сходство по полученному тексту.'

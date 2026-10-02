@@ -211,7 +211,9 @@ def test_route_preserves_provider_error_code_without_requiring_llm_credentials()
     app.dependency_overrides[get_settings] = lambda: settings()
     try:
         with TestClient(app) as client:
-            response = client.post('/api/cases/search-with-evidence', json=request().model_dump(mode='json'))
+            payload = request().model_dump(mode='json')
+            payload['plan_approval'] = {key: payload['plan'][key] for key in ('queries', 'must_have')}
+            response = client.post('/api/cases/search-with-evidence', json=payload)
         assert response.status_code == 503
         assert response.json()['error_code'] == 40301
     finally:

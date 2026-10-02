@@ -145,6 +145,7 @@ def test_api_route_requires_explicit_consent_for_semantic_ranking(monkeypatch):
     payload = {"description": SUPPLY_DESCRIPTION,
                "plan": SearchPlan(queries=["поставка товара", "неоплата товара"],
                                   must_have=SUPPLY_TERMS).model_dump(mode="json")}
+    payload['plan_approval'] = {key: payload['plan'][key] for key in ('queries', 'must_have')}
     try:
         with TestClient(app) as client:
             local = client.post("/api/cases/search-with-evidence", json=payload)

@@ -1,10 +1,44 @@
 from time import monotonic
+from collections import OrderedDict
 
 from ..models import CaseDocumentTextResponse, CourtCase, PreferredDocumentTextResponse
 from ..providers.base import CourtProvider
 from .pdf import extract_pdf_text_async
 from .cases import CaseAggregationService
 from .search_runtime import active_diagnostics
+
+
+_text_cache = OrderedDict()
+_CACHE_TTL = 3600
+_CACHE_CHARS = 5_000_000
+
+
+async def _document_text(document, provider, *, label='PDF'):
+    # A PDF URL identifies an immutable court act. Separate providers (and
+    # credentials) never share cache entries. Failed or blank extractions are
+    # not cached, and legal/model judgments are always recomputed.
+    source = getattr(provider, 'provider', provider)
+    key = (source, document.document_id, document.file_url)
+    now = monotonic()
+    for old_key, (saved, _) in list(_text_cache.items()):
+        if now - saved > _CACHE_TTL:
+            del _text_cache[old_key]
+    if key in _text_cache:
+        _, text = _text_cache[key]
+        _text_cache.move_to_end(key)
+        diagnostics = active_diagnostics.get()
+        if diagnostics is not None:
+            diagnostics.pdf_cache_hits += 1
+        return text
+    pdf_bytes = await provider.download_pdf(document.file_url)
+    if pdf_bytes is None:
+        raise PreferredDocumentNotFoundError(f'{label} document was not found by the source')
+    text = await _extract_with_timing(pdf_bytes)
+    if text.strip():
+        _text_cache[key] = (now, text)
+        while sum(len(value[1]) for value in _text_cache.values()) > _CACHE_CHARS:
+            _text_cache.popitem(last=False)
+    return text
 
 
 async def _extract_with_timing(pdf_bytes):
@@ -64,13 +98,7 @@ async def extract_case_document_text(
 
     if case.case_id and document.case_id != case.case_id:
         raise PreferredDocumentNotFoundError("Selected document belongs to another case")
-    pdf_bytes = await provider.download_pdf(document.file_url)
-    if pdf_bytes is None:
-        raise PreferredDocumentNotFoundError(
-            f"{role.replace('_', ' ').capitalize()} PDF document was not found by the source"
-        )
-
-    text = await _extract_with_timing(pdf_bytes)
+    text = await _document_text(document, provider, label=f"{role.replace('_', ' ').capitalize()} PDF")
     return CaseDocumentTextResponse(
         case_id=case.case_id,
         case_number=case.case_number,
@@ -98,13 +126,7 @@ async def extract_preferred_document_text(
         )
     if case.case_id and document.case_id != case.case_id:
         raise PreferredDocumentNotFoundError("Selected document belongs to another case")
-    pdf_bytes = await provider.download_pdf(document.file_url)
-    if pdf_bytes is None:
-        raise PreferredDocumentNotFoundError(
-            "Preferred PDF document was not found by the source"
-        )
-
-    text = await _extract_with_timing(pdf_bytes)
+    text = await _document_text(document, provider, label='Preferred PDF')
     return PreferredDocumentTextResponse(
         case_id=case.case_id,
         case_number=case.case_number,

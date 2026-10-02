@@ -14,6 +14,24 @@ _ANALYZER_LOCK = Lock()
 _TOKEN = re.compile(r'[а-яёa-z0-9][а-яёa-z0-9\u0300-\u036f]*', re.I)
 _SENTENCE_BREAK = re.compile(r'(?<=[.!?])\s+(?=[А-ЯЁA-Z«])|\n\s*\n')
 _ALTERNATIVE = re.compile(r'\s*/\s*|\s+(?:или|либо)\s+', re.I)
+_WORD_ALTERNATIVE = re.compile(r'([а-яёa-z0-9-]+)\s*/\s*([а-яёa-z0-9-]+)', re.I)
+
+
+def term_alternatives(term: str) -> list[str]:
+    # "обязательство/убытки по займу перешли" is two facts with shared
+    # qualifiers, not a bare "обязательство" OR the remaining sentence.
+    # Expand slash alternatives in place. For full clauses
+    # joined with или/либо retain each complete branch instead.
+    match = _WORD_ALTERNATIVE.search(term)
+    if match:
+        left, right = term.split('/', 1)
+        left_words, right_words = _TOKEN.findall(normalize(left)), _TOKEN.findall(normalize(right))
+        if len(left_words) > 1 and len(right_words) > 1 and word_forms(left_words[0]) & word_forms(right_words[0]):
+            return [*term_alternatives(left), *term_alternatives(right)]
+        prefix, suffix = term[:match.start()], term[match.end():]
+        return list(dict.fromkeys(value for word in match.groups()
+            for value in term_alternatives(prefix + word + suffix)))
+    return _ALTERNATIVE.split(term)
 
 
 def normalize(value: str) -> str:
@@ -66,7 +84,7 @@ def find_evidence(text: str, terms: list[str]) -> list[EvidenceMatch]:
         alternatives = [
             {word_forms(word) for word in _TOKEN.findall(normalize(part))
              if word not in _STOP_WORDS}
-            for part in _ALTERNATIVE.split(term)
+            for part in term_alternatives(term)
         ]
         # A slash or "или" joins alternative facts. Only one branch has to be
         # supported, while words within that branch still share a short passage.

@@ -15,6 +15,10 @@ class QueryPlanner(ABC):
 
 
 class RelevanceReranker(ABC):
+    async def judge_with_budget(self, description: str, candidates: list[RelevanceCandidate],
+                                timeout_seconds: float) -> list[RelevanceJudgment]:
+        return await self.judge(description, candidates)
+
     @abstractmethod
     async def judge(self, description: str, candidates: list[RelevanceCandidate]) -> list[RelevanceJudgment]:
         raise NotImplementedError

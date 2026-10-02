@@ -105,6 +105,11 @@ class ParserApiProvider(CourtProvider):
 
     def _safe_error(self, value: Any, fallback: str) -> str:
         message = str(value or fallback).replace(self._api_key, "[REDACTED]")
+        if message.strip().casefold().startswith("test access is disabled for this account"):
+            return (
+                "Parser API: тестовый доступ для этой учётной записи отключён. "
+                "Проверьте доступ к поиску судебных актов ras.arbitr.ru в кабинете Parser API."
+            )
         return re.sub(r"([?&]key=)[^&\s\"']+", r"\1[REDACTED]", message)[:500]
 
     async def _request_json(self, endpoint: str, params: dict[str, Any]) -> dict[str, Any]:

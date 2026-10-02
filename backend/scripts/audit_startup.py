@@ -16,6 +16,7 @@ import truststore
 from backend.app.build_info import BUILD_ID, ROOT
 from backend.app.config import get_settings
 from backend.app.llm.gigachat import GIGACHAT_OAUTH_URL, GIGACHAT_CHAT_URL
+from backend.app.services.web_search import YANDEX_SEARCH_URL
 
 
 def local_report():
@@ -32,33 +33,41 @@ def local_report():
         'gigachat_plan_model': s.gigachat_plan_model,
         'gigachat_relevance_model': s.gigachat_relevance_model,
         'gigachat_scope': s.gigachat_scope,
+        'web_search_provider': 'yandex_search',
+        'web_search_configured': bool(((s.yandex_search_api_key or '').strip() or
+                                      (s.yandex_api_key or '').strip()) and (s.yandex_folder_id or '').strip()),
         'credentials_present': {
             'PARSER_API_KEY': bool(s.parser_api_key), 'GIGACHAT_AUTH_KEY': bool(s.gigachat_auth_key),
+            'YANDEX_SEARCH_API_KEY': bool(s.yandex_search_api_key), 'YANDEX_API_KEY': bool(s.yandex_api_key),
         },
         'proxy_variables_present': {k: bool(os.getenv(k)) for k in ['HTTP_PROXY','HTTPS_PROXY','ALL_PROXY']},
         'limits': {k: getattr(s, k) for k in [
             'parser_api_timeout_seconds','parser_api_max_retries','search_timeout_seconds',
-            'retrieval_timeout_seconds','plan_timeout_seconds','search_max_queries',
+            'retrieval_timeout_seconds','plan_timeout_seconds','web_search_timeout_seconds','search_max_queries',
             'search_max_pages_per_query','search_max_cases','search_max_pdf_downloads',
         ]},
     }
 
 
 async def probe_https(label, url, *, ca_bundle=None):
-    host = urlsplit(url).hostname
+    target = urlsplit(url)
+    host = target.hostname
+    port = target.port or 443
+    authority = f'[{host}]' if host and ':' in host else host
+    endpoint = f'https://{authority}:{port}'
     events = []
     async def trace(name, info):
         # Trace info can contain headers and payload. Store event names only.
         if name.endswith(('.started', '.complete', '.failed')):
             events.append(name)
     started = monotonic()
-    report = {'service': label, 'host': host}
+    report = {'service': label, 'host': host, 'port': port}
     try:
         ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         if ca_bundle:
             ssl_context.load_verify_locations(cafile=ca_bundle)
         async with httpx.AsyncClient(timeout=8, verify=ssl_context) as client:
-            response = await asyncio.wait_for(client.get('https://' + host, extensions={'trace': trace}), 10)
+            response = await asyncio.wait_for(client.get(endpoint, extensions={'trace': trace}), 10)
         report['http_status'] = response.status_code
         report['https_reachable'] = True  # even 404 proves a completed handshake
     except Exception as exc:
@@ -80,7 +89,8 @@ def main():
                                         probe_https('gigachat_oauth', GIGACHAT_OAUTH_URL,
                                                     ca_bundle=settings.gigachat_ca_bundle),
                                         probe_https('gigachat_chat', GIGACHAT_CHAT_URL,
-                                                    ca_bundle=settings.gigachat_ca_bundle))
+                                                    ca_bundle=settings.gigachat_ca_bundle),
+                                        probe_https('yandex_search', YANDEX_SEARCH_URL))
         report['network'] = asyncio.run(probes())
     text = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:

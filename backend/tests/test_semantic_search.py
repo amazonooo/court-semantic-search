@@ -301,7 +301,9 @@ def test_semantic_search_endpoint() -> None:
         with TestClient(app) as client:
             response = client.post(
                 "/api/cases/semantic-search",
-                json={"description": "Компания присоединила заемщика и учла проценты по займу"},
+                json={"description": "Компания присоединила заемщика и учла проценты по займу",
+                      "plan": {"queries": ["присоединение заемщика", "проценты по займу"], "must_have": ["заем"]},
+                      "plan_approval": {"queries": ["присоединение заемщика", "проценты по займу"], "must_have": ["заем"]}},
             )
     finally:
         app.dependency_overrides.clear()
